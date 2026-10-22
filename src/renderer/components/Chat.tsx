@@ -3,6 +3,7 @@ import type { Agent, Conversation, Message } from '../../shared/types';
 import { api } from '../api';
 import { attempt, setState, useStore } from '../store';
 import { Avatar, GroupAvatar, Icon, Logo, clock, plural, renderMarkdown } from './ui';
+import { ModeBar, NeedsYouBar, WorkingBubbles, currentMode, nextMode } from './Live';
 
 const NO_REPLY = /^\(?\s*no reply\s*\)?\.?$/i;
 
@@ -41,15 +42,18 @@ export function Chat() {
 
   const working = members.filter((m) => runtimes[m.id]?.status === 'working' || runtimes[m.id]?.status === 'waiting');
   const direct = conversation.kind === 'direct' ? members[0] : undefined;
+  // Say exactly who is doing what, and where, so nothing looks stuck.
+  const describe = (m: Agent) => {
+    const r = runtimes[m.id];
+    const elsewhere = r?.conversationId && r.conversationId !== conversation.id;
+    if (r?.status === 'waiting') return `${m.name} is waiting for you${elsewhere ? ' (see the bar above)' : ''}`;
+    return `${m.name} is working${elsewhere ? ' in another chat' : ''}…`;
+  };
   const statusText = direct
-    ? runtimes[direct.id]?.status === 'working'
-      ? 'Working on it…'
-      : runtimes[direct.id]?.status === 'waiting'
-        ? 'Waiting for you'
-        : direct.label || 'Ready'
+    ? working.length ? describe(direct) : direct.label || 'Ready'
     : working.length
-      ? `${working.map((w) => w.name).join(', ')} working…`
-      : plural(members.length, "member");
+      ? working.map(describe).join(' · ')
+      : plural(members.length, 'member');
 
   return (
     <main className="chat">
@@ -69,6 +73,7 @@ export function Chat() {
           {direct ? <>{direct.emoji} About {direct.name}</> : <><Icon.Users /> Members</>}
         </button>
       </div>
+      <NeedsYouBar />
       <MessageList conversation={conversation} messages={messages ?? []} agentById={agentById} />
       <Composer conversation={conversation} members={members} />
     </main>
@@ -80,11 +85,16 @@ function MessageList({ conversation, messages, agentById }: { conversation: Conv
   const stick = useRef(true);
   const visible = messages.filter((m) => !(m.kind === 'text' && m.author.kind === 'agent' && (!m.text.trim() || NO_REPLY.test(m.text.trim()))));
   const last = visible[visible.length - 1];
+  const agents = useStore((s) => s.agents);
+  const runtimes = useStore((s) => s.runtimes);
+  const mode = currentMode(conversation, agents);
+  const busy = conversation.memberIds.some((id) => runtimes[id]?.status === 'working' || runtimes[id]?.status === 'waiting');
+  const workingKey = Object.values(runtimes).map((r) => `${r.agentId}:${r.status}:${r.activity.length}`).join('|');
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [visible.length, last?.text, last?.id]);
+  }, [visible.length, last?.text, last?.id, workingKey]);
 
   useEffect(() => {
     stick.current = true;
@@ -131,6 +141,22 @@ function MessageList({ conversation, messages, agentById }: { conversation: Conv
             </div>
           );
         })}
+        {mode === 'plan' && !busy && last?.author.kind === 'agent' && last.kind === 'text' && (
+          <div className="plan-actions">
+            <button
+              className="btn primary"
+              data-testid="run-plan"
+              onClick={async () => {
+                await attempt(() => api.setMode(conversation.id, conversation.kind === 'group' ? 'each' : 'auto'));
+                await attempt(() => api.sendMessage(conversation.id, 'Looks good. Go ahead with the plan.'));
+              }}
+            >
+              ⚡ Run this plan
+            </button>
+            <span className="muted">Switches to {conversation.kind === 'group' ? "each agent's own mode" : 'Auto'} and starts.</span>
+          </div>
+        )}
+        <WorkingBubbles conversation={conversation} />
       </div>
     </div>
   );
@@ -142,8 +168,8 @@ function MessageView({ message, agent, agentById }: { message: Message; agent?: 
     const to = agentById.get(message.relay.toAgentId);
     return (
       <div className="msg" data-testid="message">
-        <div className="relay" title={message.text}>
-          <span>{from?.emoji}</span><b>{from?.name ?? 'Agent'}</b> messaged <span>{to?.emoji}</span><b>{to?.name ?? 'Agent'}</b>
+        <div className="relay" title={message.text} onClick={(e) => e.currentTarget.classList.toggle('open')}>
+          <span className="relay-fly">{from?.emoji}</span><b>{from?.name ?? 'Agent'}</b> messaged <span>{to?.emoji}</span><b>{to?.name ?? 'Agent'}</b>
           <span className="relay-text">{message.text}</span>
         </div>
       </div>
@@ -262,6 +288,7 @@ function Composer({ conversation, members }: { conversation: Conversation; membe
   const [text, setText] = useState('');
   const ref = useRef<HTMLTextAreaElement>(null);
   const hasKey = useStore((s) => s.settings?.hasApiKey);
+  const agents = useStore((s) => s.agents);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -305,10 +332,16 @@ function Composer({ conversation, members }: { conversation: Conversation; membe
               e.preventDefault();
               send();
             }
+            if (e.key === 'Tab' && e.shiftKey) {
+              // Same as Claude Code: Shift+Tab cycles the mode.
+              e.preventDefault();
+              attempt(() => api.setMode(conversation.id, nextMode(conversation, currentMode(conversation, agents))));
+            }
           }}
         />
         <button className="send-btn" data-testid="send" disabled={!text.trim()} aria-label="Send"><Icon.Send /></button>
       </form>
+      <ModeBar conversation={conversation} />
       {!hasKey && (
         <div className="hint">
           Add a Claude or OpenAI API key in <button className="btn ghost" style={{ padding: '0 4px', border: 0, color: 'var(--accent)' }} onClick={() => setState({ sheet: 'settings' })}>Settings</button> so agents can reply.

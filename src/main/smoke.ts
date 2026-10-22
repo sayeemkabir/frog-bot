@@ -63,7 +63,11 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     })()`);
 
   try {
-    window.setSize(1360, 860);
+    // Run off-screen and without focus so a self-test is never mistaken for the real app.
+    window.setTitle('Frog Bot (self-test)');
+    window.setSkipTaskbar(true);
+    window.setFocusable(false);
+    window.setBounds({ x: -20000, y: -20000, width: 1360, height: 860 });
     window.showInactive();
 
     check('UI loads', await waitFor(`document.querySelector('[data-testid="app-ready"]')`, 20000));
@@ -108,7 +112,9 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     await typeInto('[data-testid="composer"]', 'Hi Frog, what can you do?');
     await click('[data-testid="send"]');
     check('User message appears', await waitFor(`[...document.querySelectorAll('[data-testid="message"]')].some(e => e.textContent.includes('what can you do'))`));
-    if (!process.env.FROG_SMOKE_LIVE) {
+    if (process.env.FROG_SMOKE_DEMO) {
+      await shot('05-chat');
+    } else if (!process.env.FROG_SMOKE_LIVE) {
       check('Missing key error is shown', await waitFor(`[...document.querySelectorAll('[data-testid="message"]')].some(e => e.textContent.includes('API key'))`, 20000));
       await shot('05-chat');
     } else {
@@ -164,6 +170,48 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     check('Settings opens', await waitFor(`document.querySelector('[data-testid="settings-sheet"]')`));
     await shot('10-settings');
     await click('[data-testid="sheet-close"]');
+
+    if (process.env.FROG_SMOKE_DEMO) {
+      // A scripted teamwork scene (no AI calls): live bubbles, hand-off beam, needs-you bar, modes, plan.
+      const frogId = frogThread.memberIds[0];
+      const { agent: dog } = engine.createAgent({ name: 'Dog', label: 'Finds and transcribes videos', emoji: '🐶', color: '#ffb74d' });
+      const team = engine.createGroup('Transcription team', [frogId, dog.id]);
+      await sleep(300);
+      await click(`[data-conversation-id="${team.id}"]`);
+      await waitFor(`document.querySelector('[data-testid="chat-title"]')?.textContent.includes('Transcription team')`);
+      await typeInto('[data-testid="composer"]', '@Frog please get Dog to transcribe the Mosh Python video, 2:00 to 3:00');
+      await click('[data-testid="send"]');
+      check('Demo: live working bubble appears', await waitFor(`document.querySelector('.working-bubble')`, 10000));
+      await shot('11-working');
+      check('Demo: teamwork beam when two agents work together', await waitFor(`document.querySelector('.teamwork')`, 15000));
+      await shot('12-teamwork');
+      check('Demo: hand-off shown in the group', await waitFor(`[...document.querySelectorAll('.relay')].some(e => e.textContent.includes('Dog'))`, 5000));
+
+      await click(`[data-conversation-id="${frogThread.id}"]`);
+      check('Demo: "needs you" bar shows Dog waiting, from another chat', await waitFor(`document.querySelector('[data-testid="needs-you"]')?.textContent.includes('Dog needs you')`, 25000));
+      await shot('13-needs-you');
+      await click('.needs-card .btn.primary');
+      check('Demo: approving from the bar works', await waitFor(`!document.querySelector('[data-testid="needs-you"]')`, 10000));
+      await click(`[data-conversation-id="${team.id}"]`);
+      check('Demo: Dog\'s result lands in the group', await waitFor(`[...document.querySelectorAll('[data-testid="message"]')].some(e => e.textContent.includes('transcript is saved'))`, 20000));
+      await shot('14-group-result');
+
+      await click(`[data-conversation-id="${frogThread.id}"]`);
+      await waitFor(`document.querySelector('[data-testid="mode-chip"]')`);
+      const modeText = () => js<string>(`document.querySelector('[data-testid="mode-chip"]')?.textContent ?? ''`);
+      const startMode = await modeText();
+      await click('[data-testid="mode-chip"]');
+      check('Demo: clicking the mode chip switches mode', await waitFor(`!document.querySelector('[data-testid="mode-chip"]')?.textContent.includes(${JSON.stringify(startMode.slice(0, 6))})`, 5000));
+      await js(`document.querySelector('[data-testid="composer"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }))`);
+      check('Demo: Shift+Tab reaches Plan mode', await waitFor(`document.querySelector('[data-testid="mode-chip"]')?.textContent.includes('Plan')`, 5000));
+      await shot('15-plan-mode');
+      await typeInto('[data-testid="composer"]', 'Make a plan to transcribe the video');
+      await click('[data-testid="send"]');
+      check('Demo: "Run this plan" button after a plan', await waitFor(`document.querySelector('[data-testid="run-plan"]')`, 15000));
+      await shot('16-plan');
+      await click('[data-testid="run-plan"]');
+      check('Demo: running the plan switches to Auto', await waitFor(`document.querySelector('[data-testid="mode-chip"]')?.textContent.includes('Auto')`, 5000));
+    }
 
     // Engine-level checks.
     check('Logs recorded', engine.logs().length > 10, `${engine.logs().length} entries`);

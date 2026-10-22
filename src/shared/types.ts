@@ -3,6 +3,11 @@
 
 export type ID = string;
 
+/** How freely agents act. ask: asks before changing things. auto: acts on its own, only asks before sending, deleting or touching secrets. plan: only looks and plans, changes nothing. */
+export type Mode = 'ask' | 'auto' | 'plan';
+/** A group can follow each agent's own mode, or set one mode for everyone in it. */
+export type GroupMode = Mode | 'each';
+
 export interface Agent {
   id: ID;
   name: string;
@@ -17,8 +22,8 @@ export interface Agent {
   model: string;
   /** Integration ids this agent may use. */
   integrations: ID[];
-  /** 'ask' = ask before risky actions, 'auto' = only ask before outbound messages and deletes. */
-  autonomy: 'ask' | 'auto';
+  /** The agent's own mode (used in its own chat, and in groups set to "each"). */
+  autonomy: Mode;
   /** Tool names the user said "always allow" for this agent. */
   alwaysAllow: string[];
   section: string;
@@ -37,6 +42,8 @@ export interface Conversation {
   sessions: Record<ID, string>;
   /** Index of the last message each agent has already seen (groups). */
   seen: Record<ID, number>;
+  /** Groups only: one mode for everyone here, or each agent's own. */
+  mode?: GroupMode;
   createdAt: number;
   updatedAt: number;
   preview: string;
@@ -109,13 +116,28 @@ export interface ActivityItem {
   detail?: string;
 }
 
+export interface WaitingOn {
+  conversationId: ID;
+  messageId: ID;
+  kind: 'approval' | 'question' | 'agent-request';
+  text: string;
+  options?: string[];
+  canAlwaysAllow?: boolean;
+}
+
 export interface AgentRuntime {
   agentId: ID;
   status: AgentStatus;
   currentTask?: string;
+  /** The chat the agent is working in right now. */
+  conversationId?: ID;
+  /** What the agent needs from the user right now, wherever it is. */
+  waitingOn?: WaitingOn;
   activity: ActivityItem[];
   lastScreenshot?: string;
   costUsd: number;
+  /** Tokens used this session (input + output). */
+  tokens?: number;
 }
 
 export type IntegrationTransport = 'http' | 'sse' | 'stdio' | 'builtin-browser';
@@ -197,6 +219,8 @@ export interface Settings {
   models: { id: string; label: string }[];
   startAtLogin: boolean;
   watchMode: { enabled: boolean; everyMinutes: number };
+  /** Spend fewer tokens: load app tools only when needed, trim old tool output, lighter thinking. */
+  tokenSaver: boolean;
   homeDir: string;
 }
 
@@ -243,7 +267,7 @@ export interface NewAgentInput {
   color?: string;
   model?: string;
   integrations?: ID[];
-  autonomy?: 'ask' | 'auto';
+  autonomy?: Mode;
   section?: string;
 }
 
@@ -267,12 +291,14 @@ export interface FrogApi {
   deleteAgent(agentId: ID): Promise<void>;
   createGroup(title: string, memberIds: ID[]): Promise<Conversation>;
   updateGroup(conversationId: ID, patch: { title?: string; memberIds?: ID[] }): Promise<Conversation>;
+  /** Set the mode of a chat: an agent's own chat changes that agent; a group changes the group. */
+  setMode(conversationId: ID, mode: GroupMode): Promise<void>;
   deleteConversation(conversationId: ID): Promise<void>;
   answerQuestion(messageId: ID, answer: string): Promise<void>;
   decideApproval(messageId: ID, decision: 'allow' | 'always' | 'deny'): Promise<void>;
   decideAgentRequest(messageId: ID, decision: 'approved' | 'declined'): Promise<void>;
   setApiKey(key: string): Promise<Settings>;
-  updateSettings(patch: Partial<Pick<Settings, 'workspaceName' | 'defaultModel' | 'startAtLogin' | 'watchMode'>>): Promise<Settings>;
+  updateSettings(patch: Partial<Pick<Settings, 'workspaceName' | 'defaultModel' | 'startAtLogin' | 'watchMode' | 'tokenSaver'>>): Promise<Settings>;
   addIntegration(input: AddIntegrationInput): Promise<Integration>;
   removeIntegration(id: ID): Promise<void>;
   setIntegrationEnabled(id: ID, enabled: boolean): Promise<void>;
@@ -298,6 +324,7 @@ export const FROG_API_METHODS: FrogApiMethod[] = [
   'deleteAgent',
   'createGroup',
   'updateGroup',
+  'setMode',
   'deleteConversation',
   'answerQuestion',
   'decideApproval',

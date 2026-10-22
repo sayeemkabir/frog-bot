@@ -9,9 +9,11 @@ import type {
   Conversation,
   EngineEvent,
   FileEntry,
+  GroupMode,
   ID,
   IntegrationTemplate,
   Message,
+  Mode,
   NewAgentInput,
   Provider,
   ScheduledTask,
@@ -24,7 +26,7 @@ import { Logger, redact, scrub, summarize } from './logger';
 import { findMentions } from './mentions';
 import { McpOAuth } from './oauth';
 import { FrogPaths, slugify } from './paths';
-import { classifyTool, describeToolCall } from './permissions';
+import { classifyTool, describeToolCall, isReadOnlyCall } from './permissions';
 import { buildPersona, tailFile } from './persona';
 import { ClaudeRunner, type TurnRunner, type TurnSink } from './runner';
 import { OPENAI_MODEL_PREFERENCE, OpenAIRunner } from './openaiRunner';
@@ -72,6 +74,7 @@ interface StoredSettings {
   openaiModel?: string;
   startAtLogin: boolean;
   watchMode: { enabled: boolean; everyMinutes: number };
+  tokenSaver?: boolean;
 }
 
 type TurnOrigin =
@@ -328,6 +331,7 @@ export class FrogEngine {
       models: provider === 'openai' ? openaiModels : this.config.models,
       startAtLogin: s.startAtLogin,
       watchMode: s.watchMode,
+      tokenSaver: s.tokenSaver !== false,
       hasApiKey: Boolean(provider),
       hasClaudeKey: Boolean(this.apiKey()),
       hasOpenAiKey: Boolean(this.openAiKey()),
@@ -361,7 +365,7 @@ export class FrogEngine {
     return settings;
   }
 
-  async updateSettings(patch: Partial<Pick<Settings, 'workspaceName' | 'defaultModel' | 'startAtLogin' | 'watchMode'>>) {
+  async updateSettings(patch: Partial<Pick<Settings, 'workspaceName' | 'defaultModel' | 'startAtLogin' | 'watchMode' | 'tokenSaver'>>) {
     this.settingsDoc.update((s) => {
       if (patch.workspaceName !== undefined) s.workspaceName = patch.workspaceName.trim() || s.workspaceName;
       if (patch.defaultModel !== undefined) {
@@ -369,6 +373,7 @@ export class FrogEngine {
         else s.openaiModel = patch.defaultModel;
       }
       if (patch.startAtLogin !== undefined) s.startAtLogin = patch.startAtLogin;
+      if (patch.tokenSaver !== undefined) s.tokenSaver = patch.tokenSaver;
       if (patch.watchMode !== undefined) {
         s.watchMode = {
           enabled: patch.watchMode.enabled,
@@ -606,7 +611,7 @@ export class FrogEngine {
     const source = `agent:${agent.name}`;
     const abort = new AbortController();
     this.active.set(agentId, { conversationId, abort });
-    this.setRuntime(agentId, { status: 'working', currentTask: conversation.title });
+    this.setRuntime(agentId, { status: 'working', currentTask: conversation.title, conversationId, waitingOn: undefined });
     this.pushActivity(agentId, 'status', `Started: ${summarize(prompt, 80)}`);
     this.log.info(source, `Turn started (${origin.kind}) in "${conversation.title}"`, prompt);
 
@@ -663,15 +668,18 @@ export class FrogEngine {
           });
         }
       },
-      done: ({ ok, costUsd, error }) => {
+      done: ({ ok, costUsd, error, tokens }) => {
         const runtime = this.runtimes.get(agentId);
         this.setRuntime(agentId, {
           status: ok ? 'idle' : error === 'Stopped' ? 'idle' : 'error',
           currentTask: undefined,
+          conversationId: undefined,
+          waitingOn: undefined,
           costUsd: (runtime?.costUsd ?? 0) + (costUsd || 0),
+          tokens: (runtime?.tokens ?? 0) + (tokens || 0),
         });
         this.pushActivity(agentId, 'status', ok ? 'Finished' : `Ended: ${error}`);
-        if (ok) this.log.info(source, `Turn finished ($${(costUsd || 0).toFixed(4)})`);
+        if (ok) this.log.info(source, `Turn finished (${tokens ? `${tokens.toLocaleString()} tokens` : `$${(costUsd || 0).toFixed(4)}`})`);
         else {
           lastError = error;
           this.log.error(source, 'Turn failed', error);
@@ -681,6 +689,7 @@ export class FrogEngine {
 
     try {
       const team = this.agentsDoc.value;
+      const saver = this.settingsDoc.value.tokenSaver !== false;
       const persona = buildPersona({
         agent,
         team,
@@ -689,9 +698,10 @@ export class FrogEngine {
         agentDir,
         sharedDir: this.paths.sharedDir,
         observationsDir: this.paths.observationsDir,
-        memory: tailFile(this.paths.agentMemoryFile(agent.folder), 8000),
-        teamMemory: tailFile(this.paths.teamMemoryFile, 6000),
+        memory: tailFile(this.paths.agentMemoryFile(agent.folder), saver ? 3000 : 8000),
+        teamMemory: tailFile(this.paths.teamMemoryFile, saver ? 2000 : 6000),
         platform: this.host.platform,
+        mode: this.modeFor(agent, conversation),
       });
       const depth = origin.kind === 'relay' ? origin.depth : 0;
       const servers = await this.integrations.serversFor(agent.integrations, {
@@ -714,6 +724,8 @@ export class FrogEngine {
           systemPromptAppend: persona,
           mcpServers,
           canUseTool: this.permissionGate(agent, conversationId, abort.signal),
+          fast: this.modeFor(agent, conversation) === 'auto',
+          saver,
           abort,
         },
         sink,
@@ -737,7 +749,8 @@ export class FrogEngine {
       this.addMessage(conversationId, { author: { kind: 'system' }, kind: 'error', text: `${agent.name} hit a problem: ${message}` });
     } finally {
       this.active.delete(agentId);
-      if (this.runtimes.get(agentId)?.status === 'working') this.setRuntime(agentId, { status: 'idle', currentTask: undefined });
+      const after = this.runtimes.get(agentId);
+      if (after?.status === 'working' || after?.status === 'waiting') this.setRuntime(agentId, { status: 'idle', currentTask: undefined, conversationId: undefined, waitingOn: undefined });
     }
   }
 
@@ -761,17 +774,49 @@ export class FrogEngine {
     });
   }
 
+  /** The mode an agent works in inside a chat: the group's mode, or the agent's own. */
+  modeFor(agent: Agent, conversation?: Conversation): Mode {
+    if (conversation?.kind === 'group' && conversation.mode && conversation.mode !== 'each') return conversation.mode;
+    return agent.autonomy ?? 'ask';
+  }
+
+  /** Change a chat's mode. In an agent's own chat that changes the agent; in a group, the group. */
+  async setMode(conversationId: ID, mode: GroupMode) {
+    const conversation = this.conversation(conversationId);
+    if (!conversation) throw new Error('Conversation not found');
+    if (conversation.kind === 'direct') {
+      if (mode === 'each') throw new Error('Pick Ask, Auto or Plan');
+      this.updateAgent(conversation.memberIds[0], { autonomy: mode });
+    } else {
+      this.conversationsDoc.update(() => {
+        conversation.mode = mode;
+      });
+      this.conversationsDoc.flush();
+      this.emit({ type: 'conversation:upsert', conversation });
+    }
+    this.log.info(`chat:${conversation.title}`, `Mode set to ${mode}`);
+  }
+
   private permissionGate(agent: Agent, conversationId: ID, signal: AbortSignal): CanUseTool {
     return async (toolName, input) => {
       const current = this.agent(agent.id) ?? agent;
+      // Read the mode on every call, so switching modes takes effect mid-task.
+      const mode = this.modeFor(current, this.conversation(conversationId));
+      const source = `agent:${current.name}`;
+      if (mode === 'plan' && !isReadOnlyCall(toolName, input)) {
+        this.log.info(source, `Plan mode: held back ${toolName}`);
+        return {
+          behavior: 'deny',
+          message: 'Plan mode is on: do not change anything yet. Finish looking around, then present a short numbered plan and tell the user to switch to Auto or Ask to carry it out.',
+        };
+      }
       const verdict = classifyTool(toolName, input, {
         agentDir: this.paths.agentDir(current.folder),
         writableDirs: [this.paths.agentDir(current.folder), this.paths.sharedDir],
         protectedDirs: [this.paths.stateDir, this.paths.engineDir],
-        autonomy: current.autonomy,
+        autonomy: mode === 'auto' ? 'auto' : 'ask',
         alwaysAllow: current.alwaysAllow,
       });
-      const source = `agent:${current.name}`;
       if (verdict.decision === 'allow') {
         this.log.debug(source, `Allowed ${toolName} (${verdict.reason})`);
         return { behavior: 'allow', updatedInput: input };
@@ -789,10 +834,13 @@ export class FrogEngine {
           canAlwaysAllow: verdict.canAlwaysAllow,
         },
       });
-      this.setRuntime(current.id, { status: 'waiting' });
+      this.setRuntime(current.id, {
+        status: 'waiting',
+        waitingOn: { conversationId, messageId: message.id, kind: 'approval', text: verdict.summary, canAlwaysAllow: verdict.canAlwaysAllow },
+      });
       this.host.notify(`${current.name} needs your OK`, verdict.summary, conversationId);
       const decision = await this.waitFor(message.id, conversationId, signal);
-      this.setRuntime(current.id, { status: 'working' });
+      this.setRuntime(current.id, { status: 'working', waitingOn: undefined });
 
       if (decision === 'allow' || decision === 'always') {
         if (decision === 'always' && verdict.canAlwaysAllow) {
@@ -867,26 +915,28 @@ export class FrogEngine {
           this.log.warn(source, `Relay to ${target.name} blocked: more than ${MAX_MESSAGES_PER_TURN} messages in one turn`);
           return `Not delivered: you already sent ${MAX_MESSAGES_PER_TURN} messages this turn. Wait for replies.`;
         }
-        const direct = this.directConversation(target.id);
-        if (!direct) return `${target.name} has no thread.`;
-        this.addMessage(conversationId, {
-          author: { kind: 'agent', agentId: agent.id },
-          kind: 'relay',
-          text: message,
-          relay: { fromAgentId: agent.id, toAgentId: target.id },
-        });
-        if (direct.id !== conversationId) {
-          this.addMessage(direct.id, {
-            author: { kind: 'agent', agentId: agent.id },
-            kind: 'relay',
-            text: message,
-            relay: { fromAgentId: agent.id, toAgentId: target.id },
+        // In a group both agents belong to, the hand-off happens right there, in
+        // front of the user. Otherwise it goes to the teammate's own chat.
+        const here = this.conversation(conversationId);
+        const inGroup = here?.kind === 'group' && here.memberIds.includes(target.id);
+        const destination = inGroup ? here : this.directConversation(target.id);
+        if (!destination) return `${target.name} has no thread.`;
+        const relay = { author: { kind: 'agent' as const, agentId: agent.id }, kind: 'relay' as const, text: message, relay: { fromAgentId: agent.id, toAgentId: target.id } };
+        this.addMessage(conversationId, relay);
+        if (destination.id !== conversationId) this.addMessage(destination.id, relay);
+        this.log.info(source, `Messaged ${target.name}${inGroup ? ` in "${here!.title}"` : ''}`, message);
+        const where = inGroup ? `in the group chat "${here!.title}"` : 'in your own chat';
+        const prompt = `[Message from your teammate ${agent.name}${agent.label ? ` (${agent.label})` : ''}, ${where}]\n${message}\n\nDo what is asked. To answer ${agent.name}, use message_agent. What you write here is shown to the user.`;
+        if (inGroup) {
+          // Group turns read new messages since they last spoke; mark this one seen so it is not repeated.
+          this.conversationsDoc.update(() => {
+            destination.seen[target.id] = Math.max(destination.seen[target.id] ?? 0, Date.now());
           });
         }
-        this.log.info(source, `Messaged ${target.name}`, message);
-        const prompt = `[Message from your teammate ${agent.name}${agent.label ? ` (${agent.label})` : ''}]\n${message}\n\nDo what is asked. To answer ${agent.name}, use message_agent. What you write here is shown to the user in your thread.`;
-        this.enqueueTurn(target.id, direct.id, { kind: 'relay', fromAgentId: agent.id, depth: depth + 1 }, () => prompt);
-        return `Delivered to ${target.name}. They will work on it in their own thread and can message you back.`;
+        this.enqueueTurn(target.id, destination.id, { kind: 'relay', fromAgentId: agent.id, depth: depth + 1 }, () => prompt);
+        return inGroup
+          ? `Delivered to ${target.name} here in the group. Their answer will appear in this chat.`
+          : `Delivered to ${target.name}. They will work on it in their own chat and can message you back.`;
       },
 
       askUser: async (question, options) => {
@@ -896,11 +946,11 @@ export class FrogEngine {
           text: question,
           question: { question, options },
         });
-        this.setRuntime(agent.id, { status: 'waiting' });
+        this.setRuntime(agent.id, { status: 'waiting', waitingOn: { conversationId, messageId: message.id, kind: 'question', text: question, options } });
         this.host.notify(`${agent.name} has a question`, question, conversationId);
         this.log.info(source, 'Asked you', { question, options });
         const answer = await this.waitFor(message.id, conversationId, signal);
-        this.setRuntime(agent.id, { status: 'working' });
+        this.setRuntime(agent.id, { status: 'working', waitingOn: undefined });
         return answer === '__stopped__' ? '(the user stopped this task)' : answer;
       },
 
@@ -911,11 +961,11 @@ export class FrogEngine {
           text: `I'd like a new teammate: ${input.name}`,
           agentRequest: { ...input },
         });
-        this.setRuntime(agent.id, { status: 'waiting' });
+        this.setRuntime(agent.id, { status: 'waiting', waitingOn: { conversationId, messageId: message.id, kind: 'agent-request', text: `Add a new teammate: ${input.name}` } });
         this.host.notify(`${agent.name} wants a new teammate`, `${input.name}: ${input.reason}`, conversationId);
         this.log.info(source, `Requested a new agent "${input.name}"`, input.reason);
         const decision = await this.waitFor(message.id, conversationId, signal);
-        this.setRuntime(agent.id, { status: 'working' });
+        this.setRuntime(agent.id, { status: 'working', waitingOn: undefined });
         if (decision !== 'approved') return 'The user declined. Carry on with the current team.';
         try {
           const { agent: created } = this.createAgent({

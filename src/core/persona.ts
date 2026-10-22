@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import type { Agent, Conversation } from '../shared/types';
+import type { Agent, Conversation, Mode } from '../shared/types';
 
 /** The last `max` characters of a text file (memory files grow over time). */
 export function tailFile(file: string, max: number) {
@@ -22,7 +22,14 @@ export interface PersonaInput {
   memory: string;
   teamMemory: string;
   platform: string;
+  mode: Mode;
 }
+
+const MODE_TEXT: Record<Mode, string> = {
+  ask: 'Mode: Ask. Look around freely; changes, commands and anything that speaks for the user show the user an approval card first.',
+  auto: 'Mode: Auto. Work quickly and on your own: do the task end to end without asking for confirmation, using as few steps as you can. Only sending, posting, deleting and secrets still need approval (the app asks automatically).',
+  plan: 'Mode: Plan. Do NOT change anything. Look around as much as you need, then reply with a short numbered plan and tell the user to switch to Auto or Ask to carry it out.',
+};
 
 /** Added to Claude Code's system prompt so the agent knows who it is and how this team works. */
 export function buildPersona(p: PersonaInput) {
@@ -30,8 +37,9 @@ export function buildPersona(p: PersonaInput) {
   const roster = teammates.length
     ? teammates.map((a) => `- ${a.name}${a.label ? ` — ${a.label}` : ''}`).join('\n')
     : '- (nobody else yet)';
+  const members = p.team.filter((a) => p.conversation.memberIds.includes(a.id)).map((a) => a.name);
   const where = p.conversation.kind === 'group'
-    ? `You are in the group chat "${p.conversation.title}" with: ${p.conversation.memberIds.length} members. Keep replies short, address teammates as @Name, and only speak when you add something.`
+    ? `You are in the group chat "${p.conversation.title}" with ${members.join(', ')}. Teammates you message from here answer here, in front of the user. Keep replies short, address teammates as @Name, only speak when you add something, and never redo work a teammate already finished in this chat.`
     : 'You are in your own thread with the user.';
 
   return `
@@ -65,6 +73,7 @@ Use the frog tools to work as a team:
 
 ## Where you are
 ${where}
+${MODE_TEXT[p.mode]}
 
 ## Your memory (${p.agentDir}/memory.md)
 ${p.memory.trim() || '(empty)'}

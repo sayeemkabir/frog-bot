@@ -312,3 +312,69 @@ describe('engine', () => {
     expect(() => engine.listFiles(frog.id, '../../')).toThrow(/Outside/);
   });
 });
+
+describe('modes, waiting and group hand-offs', () => {
+  it('keeps a hand-off inside the group when both agents are in it', async () => {
+    const { conversation: dogThread } = engine.createAgent({ name: 'Dog' });
+    const group = engine.createGroup('Team', engine.snapshot().agents.map((a) => a.id));
+    runner.scripts.set('Frog', async (_r, sink, tool) => sink.textDone(await tool('message_agent', { to: 'Dog', message: 'please transcribe 2:00-3:00' })));
+    runner.scripts.set('Dog', async (req, sink) => sink.textDone(req.prompt.includes('group chat "Team"') ? 'done, in the group' : 'done elsewhere'));
+    await engine.sendMessage(group.id, '@Frog get Dog to do it');
+    await engine.idle();
+    expect(texts(group.id)).toContain('agent:relay:please transcribe 2:00-3:00');
+    expect(texts(group.id)).toContain('agent:text:done, in the group');
+    expect(engine.messages(dogThread.id)).toHaveLength(0);
+  });
+
+  it('reports what an agent is waiting on, wherever the card is', async () => {
+    runner.scripts.set('Frog', async (req, sink) => {
+      await req.canUseTool('Bash', { command: 'yt-dlp --version' }, { signal: req.abort.signal } as never);
+      sink.textDone('ok');
+    });
+    await engine.sendMessage(frogThread().id, 'check yt-dlp');
+    await until(() => Boolean(engine.snapshot().runtimes[frogThread().memberIds[0]].waitingOn));
+    const waiting = engine.snapshot().runtimes[frogThread().memberIds[0]].waitingOn!;
+    expect(waiting.kind).toBe('approval');
+    expect(waiting.conversationId).toBe(frogThread().id);
+    expect(waiting.text).toContain('yt-dlp');
+    await engine.decideApproval(waiting.messageId, 'allow');
+    await engine.idle();
+    expect(engine.snapshot().runtimes[frogThread().memberIds[0]].waitingOn).toBeUndefined();
+    expect(engine.snapshot().runtimes[frogThread().memberIds[0]].status).toBe('idle');
+  });
+
+  it('plan mode looks but never changes anything, and asks nothing', async () => {
+    await engine.setMode(frogThread().id, 'plan');
+    expect(engine.snapshot().agents[0].autonomy).toBe('plan');
+    const results: string[] = [];
+    runner.scripts.set('Frog', async (req, sink) => {
+      for (const [tool, input] of [['Read', { file_path: 'notes.md' }], ['Write', { file_path: 'notes.md', content: 'x' }], ['Bash', { command: 'ls' }], ['mcp__ros__list_projects', {}], ['mcp__ros__create_post_action', {}]] as const) {
+        results.push(`${tool}:${(await req.canUseTool(tool, input as never, { signal: req.abort.signal } as never))!.behavior}`);
+      }
+      sink.textDone('1. do it');
+    });
+    await engine.sendMessage(frogThread().id, 'plan it');
+    await engine.idle();
+    expect(results).toEqual(['Read:allow', 'Write:deny', 'Bash:deny', 'mcp__ros__list_projects:allow', 'mcp__ros__create_post_action:deny']);
+    expect(engine.messages(frogThread().id).some((m) => m.kind === 'approval')).toBe(false);
+  });
+
+  it('auto mode runs commands without asking; a group mode overrides each agent', async () => {
+    await engine.setMode(frogThread().id, 'auto');
+    const decisions: string[] = [];
+    runner.scripts.set('Frog', async (req, sink) => {
+      decisions.push((await req.canUseTool('Bash', { command: 'ls' }, { signal: req.abort.signal } as never))!.behavior);
+      sink.textDone('ok');
+    });
+    await engine.sendMessage(frogThread().id, 'list files');
+    await engine.idle();
+    expect(decisions).toEqual(['allow']);
+
+    const group = engine.createGroup('Careful', [frogThread().memberIds[0]]);
+    await engine.setMode(group.id, 'plan');
+    await engine.sendMessage(group.id, 'list files');
+    await engine.idle();
+    expect(decisions).toEqual(['allow', 'deny']);
+    await expect(engine.setMode(frogThread().id, 'each')).rejects.toThrow();
+  });
+});

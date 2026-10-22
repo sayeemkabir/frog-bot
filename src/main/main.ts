@@ -23,6 +23,7 @@ import { FileSecretBox } from '../core/secrets';
 import { FROG_API_METHODS, type FrogApi } from '../shared/types';
 import { apiKeyFromEnv, loadDotEnv, openAiKeyFromEnv } from './env';
 import { runSmoke } from './smoke';
+import { DemoRunner } from './demoRunner';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const requireHere = createRequire(import.meta.url);
@@ -131,6 +132,8 @@ function createEngine() {
     envOpenAiKey: smokeDir && !process.env.FROG_SMOKE_LIVE ? undefined : openAiKeyFromEnv(),
     // The self-test must never open a real sign-in in the user's browser.
     allowSignIn: !smokeDir,
+    // FROG_SMOKE_DEMO plays a scripted scene so the self-test can show live work without any AI cost.
+    runner: smokeDir && process.env.FROG_SMOKE_DEMO ? new DemoRunner() : undefined,
   });
   if (!encryption) created.log.warn('app', 'OS keychain encryption unavailable; secrets are stored unencrypted in state/secrets.json');
   return created;
@@ -148,6 +151,7 @@ function buildApi(): FrogApi {
     deleteAgent: async (id) => engine.deleteAgent(id),
     createGroup: async (title, members) => engine.createGroup(title, members),
     updateGroup: async (id, patch) => engine.updateGroup(id, patch),
+    setMode: (id, mode) => engine.setMode(id, mode),
     deleteConversation: async (id) => engine.deleteConversation(id),
     answerQuestion: (id, answer) => engine.answerQuestion(id, answer),
     decideApproval: (id, decision) => engine.decideApproval(id, decision),

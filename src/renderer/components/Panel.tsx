@@ -3,6 +3,7 @@ import type { Agent, Conversation, FileEntry } from '../../shared/types';
 import { api } from '../api';
 import { attempt, setState, toast, useStore } from '../store';
 import { Avatar, ConfirmButton, GroupAvatar, Icon, Toggle, clock, plural, timeAgo } from './ui';
+import { MODES } from './Live';
 
 type Tab = 'details' | 'library' | 'computer';
 
@@ -79,12 +80,17 @@ function DetailsTab({ agent }: { agent: Agent }) {
       </label>
       {dirty && <button className="btn primary" onClick={save}>Save changes</button>}
 
-      <div className="row between">
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>Work on its own</div>
-          <div className="muted">Off: asks before changing things. On: only asks before sending or deleting.</div>
+      <div className="field">
+        <span>Mode in its own chat</span>
+        <div className="mode-picker">
+          {(['ask', 'auto', 'plan'] as const).map((m) => (
+            <button key={m} className={`mode-option ${agent.autonomy === m ? 'on' : ''}`} onClick={() => attempt(() => api.updateAgent(agent.id, { autonomy: m }))}>
+              <span>{MODES[m].icon}</span>
+              <b>{MODES[m].label}</b>
+              <small>{MODES[m].hint}</small>
+            </button>
+          ))}
         </div>
-        <Toggle on={agent.autonomy === 'auto'} onChange={(v) => attempt(() => api.updateAgent(agent.id, { autonomy: v ? 'auto' : 'ask' }))} />
       </div>
 
       <label className="field">
@@ -137,7 +143,10 @@ function DetailsTab({ agent }: { agent: Agent }) {
         </div>
       )}
 
-      <div className="muted">Spent so far this session: ${(runtime?.costUsd ?? 0).toFixed(2)}</div>
+      <div className="muted">
+        Used this session: {(runtime?.tokens ?? 0).toLocaleString()} tokens
+        {runtime?.costUsd ? ` · $${runtime.costUsd.toFixed(2)}` : ''}
+      </div>
       <ConfirmButton confirmText={`Tap again to remove ${agent.name} (files are kept)`} onConfirm={remove}>
         <Icon.Trash /> Remove {agent.name}
       </ConfirmButton>

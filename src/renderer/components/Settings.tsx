@@ -59,6 +59,14 @@ export function SettingsSheet() {
 
       <div className="row between">
         <div>
+          <div style={{ fontWeight: 600 }}>Save tokens</div>
+          <div className="muted">Agents load app tools only when needed, re-send less old output, and think lighter on simple work. Cheaper, nearly as smart.</div>
+        </div>
+        <Toggle on={settings.tokenSaver} onChange={(v) => attempt(() => api.updateSettings({ tokenSaver: v }))} />
+      </div>
+
+      <div className="row between">
+        <div>
           <div style={{ fontWeight: 600 }}>Start when my computer starts</div>
           <div className="muted">Agents keep working in the background while your computer is on.</div>
         </div>

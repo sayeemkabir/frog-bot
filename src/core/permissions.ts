@@ -123,6 +123,25 @@ function commandTouchesSecrets(command: string) {
   return /(\.env\b|credential|secrets\.json|id_rsa|id_ed25519|\.ssh|\.aws|login data|\.git-credentials|frogsworld[\\/](state|engine))/i.test(command);
 }
 
+/** Team tools that only talk or look (allowed in Plan mode). */
+const FROG_READ_ONLY = new Set(['list_team', 'message_agent', 'ask_user', 'list_tasks', 'recent_observations', 'notify_user', 'remember', 'use_app']);
+
+/** True when a call only looks at things and changes nothing (what Plan mode allows). */
+export function isReadOnlyCall(toolName: string, rawInput: unknown): boolean {
+  const input = asObject(rawInput);
+  if (READ_TOOLS.has(toolName)) {
+    const file = pathFromInput(input);
+    return !file || !SENSITIVE_FILE.test(file);
+  }
+  if (toolName === 'WebSearch' || toolName === 'WebFetch' || toolName === 'TodoWrite' || toolName === 'ToolSearch') return true;
+  if (toolName === 'ListMcpResourcesTool' || toolName === 'ReadMcpResourceTool' || toolName === 'ReadMcpResourceDirTool') return true;
+  const mcp = splitMcpName(toolName);
+  if (!mcp) return false;
+  if (mcp.server === 'frog') return FROG_READ_ONLY.has(mcp.tool);
+  if (mcp.server === 'browser') return !BROWSER_ACTING.test(mcp.tool.replace(/^browser_/, ''));
+  return toolIntent(mcp.tool) === 'read';
+}
+
 export function describeToolCall(toolName: string, rawInput: unknown): string {
   const input = asObject(rawInput);
   const mcp = splitMcpName(toolName);

@@ -136,31 +136,71 @@ export class OpenAIRunner implements TurnRunner {
         });
         if (handle) handles.push(handle);
       }
-      const mcpTools: ChatCompletionTool[] = [];
+      // Tools per app. With the token saver on, only the team tools are sent up
+      // front; the agent turns other apps on with use_app when it needs them,
+      // which keeps dozens of tool definitions out of every request.
+      const appTools = new Map<string, ChatCompletionTool[]>();
       for (const handle of handles) {
         const { tools } = await handle.client.listTools();
+        const list: ChatCompletionTool[] = [];
         for (const tool of tools) {
           const fullName = `mcp__${handle.server}__${tool.name}`.slice(0, 64);
           handle.tools.set(fullName, tool.name);
           const { $schema: _s, ...schema } = (tool.inputSchema ?? { type: 'object', properties: {} }) as Record<string, unknown>;
-          mcpTools.push({ type: 'function', function: { name: fullName, description: (tool.description ?? '').slice(0, 1000), parameters: schema } });
+          list.push({ type: 'function', function: { name: fullName, description: (tool.description ?? '').slice(0, 1000), parameters: schema } });
+        }
+        appTools.set(handle.server, list);
+      }
+      const lazyApps = [...appTools.keys()].filter((app) => req.saver && app !== 'frog');
+      const enabled = new Set<string>([...appTools.keys()].filter((app) => !lazyApps.includes(app)));
+      // Apps already used earlier in this conversation stay on.
+      for (const m of history) {
+        if (m.role !== 'assistant') continue;
+        for (const c of m.tool_calls ?? []) {
+          const name = c.type === 'function' ? c.function.name : '';
+          const app = [...appTools.keys()].find((a) => name.startsWith(`mcp__${a}__`));
+          if (app) enabled.add(app);
         }
       }
-      log.info(source, 'Engine ready (OpenAI)', { model: req.model, apps: handles.map((h) => `${h.server}:${h.tools.size}`).join(', ') });
-
-      const tools = [...LOCAL_TOOLS.map((t) => t.tool), ...mcpTools];
+      const useApp: ChatCompletionTool | null = lazyApps.length
+        ? fn(
+            'use_app',
+            `Turn on the tools of a connected app before using it. Apps: ${lazyApps.map((a) => `${a} (${appTools.get(a)!.length} tools)`).join(', ')}.`,
+            { app: { type: 'string', enum: lazyApps } },
+            ['app'],
+          )
+        : null;
+      const currentTools = () => [
+        ...LOCAL_TOOLS.map((t) => t.tool),
+        ...(useApp ? [useApp] : []),
+        ...[...enabled].flatMap((app) => appTools.get(app) ?? []),
+      ];
+      log.info(source, 'Engine ready (OpenAI)', {
+        model: req.model,
+        apps: handles.map((h) => `${h.server}:${h.tools.size}${enabled.has(h.server) ? '' : ' (on demand)'}`).join(', '),
+      });
+      let tokens = 0;
       const system: ChatCompletionMessageParam = { role: 'system', content: `${baseSystemPrompt(req)}\n\n${req.systemPromptAppend}` };
       history.push({ role: 'user', content: req.prompt });
 
       for (let step = 0; step < MAX_STEPS; step++) {
         if (req.abort.signal.aborted) throw new Error('Stopped');
+        const reasoning = /^(gpt-5|o\d)/.test(req.model) ? { reasoning_effort: (req.saver && req.fast ? 'low' : 'medium') as 'low' | 'medium' } : {};
         const stream = await client.chat.completions.create(
-          { model: req.model, messages: [system, ...history], tools, stream: true },
+          {
+            model: req.model,
+            messages: [system, ...(req.saver ? trimForTokens(history) : history)],
+            tools: currentTools(),
+            stream: true,
+            stream_options: { include_usage: true },
+            ...reasoning,
+          },
           { signal: req.abort.signal },
         );
         let text = '';
         const calls: { id: string; name: string; args: string }[] = [];
         for await (const chunk of stream) {
+          if (chunk.usage) tokens += (chunk.usage.prompt_tokens ?? 0) + (chunk.usage.completion_tokens ?? 0);
           const delta = chunk.choices[0]?.delta;
           if (!delta) continue;
           if (delta.content) {
@@ -184,10 +224,27 @@ export class OpenAIRunner implements TurnRunner {
         });
         if (calls.length === 0) {
           this.save(sessionFile, history);
-          sink.done({ ok: true, costUsd: 0 });
+          sink.done({ ok: true, costUsd: 0, tokens });
           return;
         }
         for (const call of calls) {
+          if (call.name === 'use_app') {
+            let app = '';
+            try {
+              app = String(JSON.parse(call.args || '{}').app ?? '');
+            } catch {
+              // reported below as an unknown app
+            }
+            const known = appTools.has(app);
+            if (known) enabled.add(app);
+            sink.tool(call.id, `Opened app: ${app}`, {});
+            const note = known
+              ? `${app} is on. Tools: ${appTools.get(app)!.map((t) => (t.type === 'function' ? t.function.name : '')).join(', ')}`
+              : `Unknown app "${app}"`;
+            sink.toolResult(call.id, note, !known);
+            history.push({ role: 'tool', tool_call_id: call.id, content: note });
+            continue;
+          }
           const output = await this.runTool(call, req, sink, handles);
           history.push({ role: 'tool', tool_call_id: call.id, content: output.slice(0, TOOL_OUTPUT_LIMIT) });
         }
@@ -280,6 +337,24 @@ export class OpenAIRunner implements TurnRunner {
     }
     return { client, server: name, tools: new Map() };
   }
+}
+
+/**
+ * Token saver: tool output from earlier requests has already been read, so
+ * only a short head of it is sent again. The latest round stays complete.
+ */
+export function trimForTokens(history: ChatCompletionMessageParam[], keep = 600): ChatCompletionMessageParam[] {
+  let lastUser = -1;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role === 'user') {
+      lastUser = i;
+      break;
+    }
+  }
+  return history.map((m, i) => {
+    if (i >= lastUser || m.role !== 'tool' || typeof m.content !== 'string' || m.content.length <= keep) return m;
+    return { ...m, content: `${m.content.slice(0, keep)}\n…(older output trimmed to save tokens)` };
+  });
 }
 
 /**

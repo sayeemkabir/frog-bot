@@ -13,6 +13,10 @@ export interface TurnRequest {
   mcpServers: Record<string, McpServerConfig>;
   canUseTool: CanUseTool;
   abort: AbortController;
+  /** Auto mode: finish quickly with few steps. */
+  fast?: boolean;
+  /** Token saver: lighter thinking, app tools loaded on demand, old tool output trimmed. */
+  saver?: boolean;
 }
 
 /** What a turn reports back while it runs. */
@@ -22,7 +26,7 @@ export interface TurnSink {
   tool(id: string, name: string, input: Record<string, unknown>): void;
   toolResult(id: string, text: string, isError: boolean, image?: string): void;
   session(sessionId: string): void;
-  done(result: { ok: boolean; costUsd: number; error?: string }): void;
+  done(result: { ok: boolean; costUsd: number; error?: string; tokens?: number }): void;
 }
 
 export interface TurnRunner {
@@ -104,7 +108,7 @@ export class ClaudeRunner implements TurnRunner {
         cwd: req.cwd,
         additionalDirectories: req.additionalDirectories,
         model: req.model,
-        effort: 'high',
+        effort: req.saver ? 'medium' : 'high',
         resume: req.sessionId,
         systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemPromptAppend },
         mcpServers: req.mcpServers,
@@ -179,7 +183,9 @@ export class ClaudeRunner implements TurnRunner {
             finished = true;
             if (streamed.trim()) sink.textDone(streamed);
             if (message.subtype === 'success' && !message.is_error) {
-              sink.done({ ok: true, costUsd: message.total_cost_usd });
+              const u = message.usage as { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
+              const tokens = (u?.input_tokens ?? 0) + (u?.output_tokens ?? 0) + (u?.cache_read_input_tokens ?? 0) + (u?.cache_creation_input_tokens ?? 0);
+              sink.done({ ok: true, costUsd: message.total_cost_usd, tokens });
             } else {
               const error = message.subtype === 'success' ? message.result : message.errors.join('\n') || message.subtype;
               sink.done({ ok: false, costUsd: message.total_cost_usd ?? 0, error: friendlyClaudeError(error) });
