@@ -110,8 +110,30 @@ function render(size, { background }) {
   return png(size, rgba);
 }
 
+/** A Windows .ico made of PNG images (supported since Windows Vista). */
+function ico(pngs) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(pngs.length, 4);
+  let offset = 6 + 16 * pngs.length;
+  const dir = pngs.map(({ size, data }) => {
+    const e = Buffer.alloc(16);
+    e[0] = size >= 256 ? 0 : size;
+    e[1] = size >= 256 ? 0 : size;
+    e.writeUInt16LE(1, 4);
+    e.writeUInt16LE(32, 6);
+    e.writeUInt32LE(data.length, 8);
+    e.writeUInt32LE(offset, 12);
+    offset += data.length;
+    return e;
+  });
+  return Buffer.concat([header, ...dir, ...pngs.map((p) => p.data)]);
+}
+
 const out = path.join(root, 'build');
 fs.mkdirSync(out, { recursive: true });
 fs.writeFileSync(path.join(out, 'icon.png'), render(512, { background: true }));
 fs.writeFileSync(path.join(out, 'tray.png'), render(64, { background: false }));
-console.log('✓ wrote build/icon.png and build/tray.png');
+fs.writeFileSync(path.join(out, 'icon.ico'), ico([256, 64, 48, 32, 16].map((size) => ({ size, data: render(size, { background: true }) }))));
+console.log('✓ wrote build/icon.png, build/tray.png and build/icon.ico');

@@ -19,12 +19,18 @@ Frog Bot is a desktop chat app (Windows, macOS, Linux). Inside it you have **age
 
 ## Getting started (no coding needed)
 
-1. Install Frog Bot from the latest release (`.exe` for Windows, `.dmg` for Mac, `.AppImage`/`.deb` for Linux).
-2. Open it and paste an API key:
-   - **Claude** (best): [console.anthropic.com](https://console.anthropic.com) → API keys. Name it `Frogbot`.
-   - **OpenAI** also works: [platform.openai.com](https://platform.openai.com) → API keys.
-3. Your browser opens the **ROS dashboard** sign-in once. Click **Allow**. After that it stays connected.
-4. Say hi to **Frog**, your lead agent. Press **+** to add more agents or a group.
+**Download page: https://sayeemkabir.github.io/frogbot/** (picks the right download for your computer).
+
+| Computer | Install |
+|---|---|
+| Windows 10/11 | Download and open **FrogBot-Setup-Windows.exe**. If Windows warns you, click **More info → Run anyway**. |
+| Mac | In Terminal: `curl -fsSL https://sayeemkabir.github.io/frogbot/install-mac.sh \| bash` |
+| Linux (64-bit) | In a terminal: `curl -fsSL https://sayeemkabir.github.io/frogbot/install-linux.sh \| bash` |
+
+Then:
+1. Paste an API key: **Claude** (console.anthropic.com, best) or **OpenAI** (platform.openai.com).
+2. Your browser opens the **ROS dashboard** sign-in once. Click **Allow**.
+3. Say hi to **Frog**. Press **+** to add agents or a group.
 
 That's it. Your key is stored encrypted with your system keychain and never leaves your computer except to talk to the AI provider.
 
@@ -64,10 +70,11 @@ npm run dev               # hot-reloading UI, main process rebuilt on save
 | `FROG_LIVE=1 npx vitest run tests/live.test.ts` | Live tests with a real model (uses your key) |
 | `npm run smoke -- --runs 3` | Launches the real app, clicks through every screen, saves screenshots to `smoke-output/` |
 | `npm run typecheck` | TypeScript check |
-| `npm run dist:win` / `dist:mac` / `dist:linux` | Build installers into `release/` |
+| `node scripts/package-all.mjs` | Build Windows, Mac and Linux installers into `release/` from this one machine |
+| `node scripts/video/make-setup-videos.mjs tutorial` | Re-make the tutorial and setup videos (Windows voice + ffmpeg) |
 | `npm run server` | Headless server mode (see below) |
 
-GitHub Actions builds and tests on Windows, macOS and Linux on every push (`.github/workflows/build.yml`), and attaches installers to a release when you push a `v*` tag.
+Installers are published at **github.com/sayeemkabir/frogbot/releases**, and the website lives in that same public repo. `.github/workflows/build.yml` builds on all three systems with GitHub Actions once it is re-enabled.
 
 ### How it's built
 

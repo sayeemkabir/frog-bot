@@ -61,10 +61,14 @@ function iconPath(name: string) {
 /** The engine's native binary lives outside the asar archive in a packaged app. */
 function claudeExecutable() {
   if (!app.isPackaged) return undefined;
+  const name = process.platform === 'win32' ? 'claude.exe' : 'claude';
+  const pkg = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`;
+  // Look on disk first (works however the package was assembled), then via module resolution.
+  const direct = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', ...pkg.split('/'), name);
+  if (fs.existsSync(direct)) return direct;
   try {
-    const pkg = requireHere.resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`);
-    const binary = path.join(path.dirname(pkg), process.platform === 'win32' ? 'claude.exe' : 'claude');
-    return binary.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+    const resolved = path.join(path.dirname(requireHere.resolve(`${pkg}/package.json`)), name);
+    return resolved.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
   } catch {
     return undefined;
   }

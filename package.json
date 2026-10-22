@@ -43,7 +43,9 @@
     "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1"
   },
   "build": {
     "appId": "com.sayeemkabir.frogbot",
@@ -58,7 +60,8 @@
       "build/icon.png",
       "build/tray.png",
       "package.json",
-      "!**/*.map"
+      "!**/*.map",
+      "build/icon.ico"
     ],
     "asarUnpack": [
       "node_modules/@anthropic-ai/claude-agent-sdk-*/**",
@@ -85,18 +88,19 @@
           ]
         }
       ],
-      "icon": "build/icon.png"
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
-      "shortcutName": "Frog Bot"
+      "shortcutName": "Frog Bot",
+      "artifactName": "FrogBot-Setup-Windows.${ext}"
     },
     "mac": {
       "target": [
         {
-          "target": "dmg",
+          "target": "zip",
           "arch": [
             "arm64",
             "x64"
@@ -107,16 +111,19 @@
       "icon": "build/icon.png",
       "extendInfo": {
         "NSScreenCaptureUsageDescription": "Frog Bot takes screenshots only when you turn on “Learn from my screen”."
-      }
+      },
+      "artifactName": "FrogBot-Mac-${arch}.${ext}",
+      "identity": null
     },
     "linux": {
       "target": [
-        "AppImage",
-        "deb"
+        "tar.gz"
       ],
       "category": "Office",
       "icon": "build/icon.png",
-      "maintainer": "Sayeem Kabir <rezwanksayeem@gmail.com>"
-    }
+      "maintainer": "Sayeem Kabir <rezwanksayeem@gmail.com>",
+      "artifactName": "FrogBot-Linux-${arch}.${ext}"
+    },
+    "compression": "normal"
   }
 }
