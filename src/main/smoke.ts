@@ -67,7 +67,7 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     window.showInactive();
 
     check('UI loads', await waitFor(`document.querySelector('[data-testid="app-ready"]')`, 20000));
-    check('Onboarding shows when there is no API key', await waitFor(`document.querySelector('[data-testid="onboarding"]')`, 5000));
+    if (!process.env.FROG_SMOKE_LIVE) check('Onboarding shows when there is no API key', await waitFor(`document.querySelector('[data-testid="onboarding"]')`, 5000));
     await shot('01-onboarding');
     await click('[data-testid="onboarding-skip"]');
     check('Onboarding can be skipped', await waitFor(`!document.querySelector('[data-testid="onboarding"]')`, 5000));
@@ -108,8 +108,25 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     await typeInto('[data-testid="composer"]', 'Hi Frog, what can you do?');
     await click('[data-testid="send"]');
     check('User message appears', await waitFor(`[...document.querySelectorAll('[data-testid="message"]')].some(e => e.textContent.includes('what can you do'))`));
-    check('Missing key error is shown', await waitFor(`[...document.querySelectorAll('[data-testid="message"]')].some(e => e.textContent.includes('API key'))`, 20000));
-    await shot('05-chat');
+    if (!process.env.FROG_SMOKE_LIVE) {
+      check('Missing key error is shown', await waitFor(`[...document.querySelectorAll('[data-testid="message"]')].some(e => e.textContent.includes('API key'))`, 20000));
+      await shot('05-chat');
+    } else {
+      // With a real key: a real reply, then an approval card, captured for the tutorial.
+      const replied = () => engine.messages(frogThread.id).some((m) => m.author.kind === 'agent' && m.kind === 'text' && !m.streaming);
+      const end = Date.now() + 120_000;
+      while (!replied() && Date.now() < end) await sleep(500);
+      check('Live: agent replied', replied());
+      await shot('05-chat');
+      await typeInto('[data-testid="composer"]', 'Please run the command: echo hello from Frog Bot');
+      await click('[data-testid="send"]');
+      check('Live: approval card shown', await waitFor(`document.querySelector('[data-testid="approval-card"]')`, 120_000));
+      await shot('05b-approval');
+      await click('[data-testid="approve"]');
+      const done = Date.now() + 120_000;
+      while (Date.now() < done && engine.snapshot().runtimes[frogThread.memberIds[0]]?.status !== 'idle') await sleep(500);
+      await shot('05c-approved');
+    }
 
     // Right panel tabs.
     await click('[data-testid="toggle-panel"]');

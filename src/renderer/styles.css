@@ -533,3 +533,5 @@ a { color: var(--accent); }
 .group-avatar.single span { font-size: inherit; }
 /* Toasts sit top-right so they never cover the composer. */
 .toasts { top: calc(var(--titlebar) + 56px); bottom: auto; }
+/* Sheets: keep the frosted look but never let busy content behind them hurt readability. */
+.sheet { background: linear-gradient(180deg, rgba(30, 36, 33, 0.94), rgba(16, 19, 18, 0.97)); }
