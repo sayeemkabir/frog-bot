@@ -1,0 +1,18 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "editor.formatOnSave": false,
+  "editor.tabSize": 2,
+  "files.eol": "\n",
+  "files.exclude": {
+    "**/node_modules": true,
+    "dist": true,
+    "release": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "dist": true,
+    "release": true,
+    "smoke-output": true
+  },
+  "vitest.enable": true
+}

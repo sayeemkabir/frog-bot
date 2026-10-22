@@ -1,0 +1,122 @@
+{
+  "name": "frog-bot",
+  "productName": "Frog Bot",
+  "version": "0.1.0",
+  "description": "A desktop team of Claude agents that live on your computer, talk to each other, use your apps through MCP, and ask before acting on your behalf.",
+  "author": "Sayeem Kabir <rezwanksayeem@gmail.com>",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/main/main.mjs",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/build.mjs && electron .",
+    "server": "node scripts/build.mjs --server && node dist/server/server.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "smoke": "node scripts/smoke.mjs",
+    "dist": "node scripts/build.mjs && electron-builder --publish never",
+    "dist:win": "node scripts/build.mjs && electron-builder --win --publish never",
+    "dist:mac": "node scripts/build.mjs && electron-builder --mac --publish never",
+    "dist:linux": "node scripts/build.mjs && electron-builder --linux --publish never"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.308",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@playwright/mcp": "^0.0.83",
+    "openai": "^7.42.0",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "build": {
+    "appId": "com.sayeemkabir.frogbot",
+    "productName": "Frog Bot",
+    "copyright": "Copyright © 2026 Sayeem Kabir",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "build/icon.png",
+      "build/tray.png",
+      "package.json",
+      "!**/*.map"
+    ],
+    "asarUnpack": [
+      "node_modules/@anthropic-ai/claude-agent-sdk-*/**",
+      "node_modules/@playwright/mcp/**",
+      "node_modules/playwright/**",
+      "node_modules/playwright-core/**"
+    ],
+    "extraResources": [
+      {
+        "from": "build/tray.png",
+        "to": "tray.png"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "shortcutName": "Frog Bot"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "Frog Bot takes screenshots only when you turn on “Learn from my screen”."
+      }
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "icon": "build/icon.png",
+      "maintainer": "Sayeem Kabir <rezwanksayeem@gmail.com>"
+    }
+  }
+}

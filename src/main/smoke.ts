@@ -1,0 +1,163 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import type { BrowserWindow } from 'electron';
+import type { FrogEngine } from '../core/engine';
+
+interface SmokeContext {
+  engine: FrogEngine;
+  window: BrowserWindow;
+  outDir: string;
+}
+
+interface Check {
+  name: string;
+  ok: boolean;
+  detail?: string;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * `electron . --smoke=<dir>` boots the real app against a throwaway FrogsWorld,
+ * clicks through every screen, saves a screenshot of each, and writes
+ * results.json. Exit code 0 means every check passed.
+ */
+export async function runSmoke({ engine, window, outDir }: SmokeContext): Promise<number> {
+  fs.mkdirSync(outDir, { recursive: true });
+  const checks: Check[] = [];
+  const check = (name: string, ok: boolean, detail?: string) => {
+    checks.push({ name, ok, detail });
+    engine.log.info('smoke', `${ok ? 'PASS' : 'FAIL'} ${name}`, detail);
+  };
+  const js = <T>(code: string) => window.webContents.executeJavaScript(code, true) as Promise<T>;
+  const waitFor = async (code: string, timeoutMs = 15000) => {
+    const end = Date.now() + timeoutMs;
+    while (Date.now() < end) {
+      try {
+        if (await js<boolean>(`Boolean(${code})`)) return true;
+      } catch {
+        // Page still loading.
+      }
+      await sleep(150);
+    }
+    return false;
+  };
+  const shot = async (name: string) => {
+    // Let animations settle, then force a fresh frame before capturing.
+    await sleep(1100);
+    window.webContents.invalidate();
+    await js('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))');
+    await sleep(120);
+    const image = await window.webContents.capturePage(undefined, { stayAwake: true });
+    fs.writeFileSync(path.join(outDir, `${name}.png`), image.toPNG());
+  };
+  const click = (selector: string) => js<boolean>(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.click(); return true; })()`);
+  const typeInto = (selector: string, value: string) =>
+    js<boolean>(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return false;
+      const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(value)});
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`);
+
+  try {
+    window.setSize(1360, 860);
+    window.showInactive();
+
+    check('UI loads', await waitFor(`document.querySelector('[data-testid="app-ready"]')`, 20000));
+    check('Onboarding shows when there is no API key', await waitFor(`document.querySelector('[data-testid="onboarding"]')`, 5000));
+    await shot('01-onboarding');
+    await click('[data-testid="onboarding-skip"]');
+    check('Onboarding can be skipped', await waitFor(`!document.querySelector('[data-testid="onboarding"]')`, 5000));
+
+    const snapshot = engine.snapshot();
+    check('Default agent "Frog" exists', snapshot.agents.some((a) => a.name === 'Frog'));
+    check('ROS integration is built in', snapshot.integrations.some((i) => i.id === 'ros' && i.builtin));
+    check('Sidebar lists Frog', await waitFor(`[...document.querySelectorAll('[data-testid="conversation-item"]')].some(e => e.textContent.includes('Frog'))`));
+    await shot('02-home');
+
+    // Create an agent through the real dialog.
+    await click('[data-testid="new-menu"]');
+    check('New menu opens', await waitFor(`document.querySelector('[data-testid="new-agent"]')`));
+    await click('[data-testid="new-agent"]');
+    check('New agent dialog opens', await waitFor(`document.querySelector('[data-testid="agent-dialog"]')`));
+    await typeInto('[data-testid="agent-name"]', 'Docs Guy');
+    await typeInto('[data-testid="agent-label"]', 'Writes and reviews drafts');
+    await typeInto('[data-testid="agent-instructions"]', 'Keep the house voice. Lowercase, short, no em dashes.');
+    await shot('03-new-agent');
+    await click('[data-testid="agent-save"]');
+    check('Agent created from the dialog', await waitFor(`[...document.querySelectorAll('[data-testid="conversation-item"]')].some(e => e.textContent.includes('Docs Guy'))`));
+    check('Agent folder created on disk', fs.existsSync(engine.paths.agentDir('docs-guy')));
+    check('New agent opens its chat', await waitFor(`document.querySelector('[data-testid="chat-title"]')?.textContent.includes('Docs Guy')`));
+
+    // Group chat.
+    const agents = engine.snapshot().agents;
+    const group = engine.createGroup('Sam Bots', agents.map((a) => a.id));
+    check('Group created', Boolean(group.id));
+    await sleep(300);
+    await click(`[data-conversation-id="${group.id}"]`);
+    check('Group opens with members panel', await waitFor(`document.querySelector('[data-testid="chat-title"]')?.textContent.includes('Sam Bots')`));
+    await shot('04-group');
+
+    // Sending without a key surfaces a clear error in the chat.
+    const frogThread = engine.snapshot().conversations.find((c) => c.kind === 'direct' && c.title === 'Frog')!;
+    await click(`[data-conversation-id="${frogThread.id}"]`);
+    await waitFor(`document.querySelector('[data-testid="composer"]')`);
+    await typeInto('[data-testid="composer"]', 'Hi Frog, what can you do?');
+    await click('[data-testid="send"]');
+    check('User message appears', await waitFor(`[...document.querySelectorAll('[data-testid="message"]')].some(e => e.textContent.includes('what can you do'))`));
+    check('Missing key error is shown', await waitFor(`[...document.querySelectorAll('[data-testid="message"]')].some(e => e.textContent.includes('API key'))`, 20000));
+    await shot('05-chat');
+
+    // Right panel tabs.
+    await click('[data-testid="toggle-panel"]');
+    check('Agent panel opens', await waitFor(`document.querySelector('[data-testid="panel"]')`));
+    for (const tab of ['details', 'library', 'computer']) {
+      await click(`[data-testid="panel-tab-${tab}"]`);
+      check(`Right panel: ${tab}`, await waitFor(`document.querySelector('[data-testid="panel-${tab}"]')`));
+      await shot(`06-panel-${tab}`);
+    }
+    await click('[data-testid="toggle-panel"]');
+    check('Agent panel closes', await waitFor(`!document.querySelector('[data-testid="panel"]')`));
+
+    // Integrations sheet.
+    await click('[data-testid="open-integrations"]');
+    check('Integrations sheet opens', await waitFor(`document.querySelector('[data-testid="integrations-sheet"]')`));
+    check('ROS card shown', await waitFor(`document.querySelector('[data-integration-id="ros"]')`));
+    await sleep(500);
+    await shot('07-integrations');
+    await click('[data-testid="template-custom-http"]');
+    check('Custom integration form opens', await waitFor(`document.querySelector('[data-testid="integration-form"]')`));
+    await shot('08-integration-form');
+    await click('[data-testid="sheet-close"]');
+    await waitFor(`!document.querySelector('[data-testid="integrations-sheet"]')`);
+
+    // Logs tab.
+    await click('[data-testid="nav-logs"]');
+    check('Logs view opens', await waitFor(`document.querySelector('[data-testid="logs-view"]')`));
+    check('Logs show timestamped lines', await waitFor(`[...document.querySelectorAll('[data-testid="log-line"]')].length > 5`));
+    check('Logs contain agent activity', await waitFor(`[...document.querySelectorAll('[data-testid="log-line"]')].some(e => e.textContent.includes('agent:Frog'))`));
+    await shot('09-logs');
+    await click('[data-testid="nav-chats"]');
+
+    // Settings.
+    await click('[data-testid="open-settings"]');
+    check('Settings opens', await waitFor(`document.querySelector('[data-testid="settings-sheet"]')`));
+    await shot('10-settings');
+    await click('[data-testid="sheet-close"]');
+
+    // Engine-level checks.
+    check('Logs recorded', engine.logs().length > 10, `${engine.logs().length} entries`);
+    check('Log file written', fs.readdirSync(engine.paths.logsDir).some((f) => f.endsWith('.log')));
+    engine.flush();
+    check('State saved', fs.existsSync(path.join(engine.paths.stateDir, 'agents.json')));
+  } catch (err) {
+    check('Smoke run finished without crashing', false, err instanceof Error ? err.stack : String(err));
+  }
+
+  const failed = checks.filter((c) => !c.ok);
+  fs.writeFileSync(path.join(outDir, 'results.json'), JSON.stringify({ passed: checks.length - failed.length, failed: failed.length, checks }, null, 2));
+  return failed.length ? 1 : 0;
+}

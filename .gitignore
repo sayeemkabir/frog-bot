@@ -1,0 +1,19 @@
+node_modules/
+dist/
+release/
+out/
+coverage/
+*.log
+.env
+.env.local
+.DS_Store
+Thumbs.db
+smoke-output/
+# Never commit keys or credentials, whatever the file is called.
+*.env
+*.env.*
+!.env.example
+*credential*
+*Credential*
+secrets.json
+*.key

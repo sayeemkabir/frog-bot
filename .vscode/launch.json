@@ -1,0 +1,34 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Frog Bot: run app (debug main process)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
+      "windows": { "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron.cmd" },
+      "args": ["."],
+      "preLaunchTask": "Frog Bot: build",
+      "outputCapture": "std",
+      "sourceMaps": true
+    },
+    {
+      "name": "Frog Bot: dev mode (hot reload)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/scripts/dev.mjs",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Frog Bot: tests",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": ["run"],
+      "console": "integratedTerminal"
+    }
+  ]
+}
