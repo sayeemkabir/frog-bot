@@ -112,3 +112,8 @@ Add an entry to `config/frogbot.config.json` → `integrations` (auto-connected 
 ## License
 
 MIT © Sayeem Kabir
+
+## Tutorial
+
+A 2 min 42 s narrated walkthrough for the team lives in `tutorial/frog-bot-tutorial.mp4` (subtitles in `tutorial/frog-bot-tutorial.srt`, script in `tutorial/tutorial-script.md`).
+It was made by two Frog Bot agents working together: **Director** briefed **Scriptwriter**, Scriptwriter wrote the narration, and Director built the video with the computer's own voice and ffmpeg. The whole conversation is in `tutorial/collaboration-log.md`. Re-create it with `FROG_LIVE=1 npx vitest run tests/collab.live.test.ts`.

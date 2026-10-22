@@ -62,6 +62,8 @@ export interface EngineOptions {
   envApiKey?: string;
   /** An OpenAI key from the environment, used when there is no Claude key. */
   envOpenAiKey?: string;
+  /** Allow opening browser sign-ins on startup (off for tests and self-checks). */
+  allowSignIn?: boolean;
 }
 
 interface StoredSettings {
@@ -106,6 +108,7 @@ export class FrogEngine {
   private secrets: SecretBox;
   private envApiKey?: string;
   private envOpenAiKey?: string;
+  private allowSignIn: boolean;
 
   private agentsDoc: JsonDoc<Agent[]>;
   private conversationsDoc: JsonDoc<Conversation[]>;
@@ -132,6 +135,7 @@ export class FrogEngine {
     this.host = opts.host;
     this.envApiKey = opts.envApiKey;
     this.envOpenAiKey = opts.envOpenAiKey;
+    this.allowSignIn = opts.allowSignIn ?? true;
     this.log = opts.logger ?? new Logger(this.paths.logsDir);
     this.log.onEntry((entry) => this.emit({ type: 'log', entry }));
 
@@ -271,7 +275,7 @@ export class FrogEngine {
       // Open the browser sign-in automatically the very first time; after that
       // tokens refresh silently, and only an expired sign-in asks again.
       const firstTime = integration.auth === 'oauth' && !this.secrets.get(`oauth:${integration.id}:tokens`) && !this.secrets.get(`token:${integration.id}`);
-      const status = await this.integrations.connect(integration.id, { interactive: firstTime && Boolean(this.apiKey()) });
+      const status = await this.integrations.connect(integration.id, { interactive: firstTime && this.allowSignIn && Boolean(this.provider()) });
       if (status.state === 'needs-auth' && !firstTime) {
         this.host.notify(`${integration.name} needs you`, 'Sign-in expired. Open Integrations and click Connect.');
       }

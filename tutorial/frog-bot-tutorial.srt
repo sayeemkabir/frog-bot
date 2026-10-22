@@ -1,0 +1,83 @@
+1
+00:00:00,000 --> 00:00:06,928
+Welcome to Frog Bot. It is a desktop app where AI agents work like
+teammates on your computer.
+
+2
+00:00:07,628 --> 00:00:19,471
+The first time you open Frog Bot, it asks for an API key from Claude
+or OpenAI. Then you allow the ROS dashboard once, and you can start
+chatting with Frog right away.
+
+3
+00:00:20,171 --> 00:00:29,049
+This is the main home screen. Your agents and groups are on the left,
+the chat is in the middle, and quick suggestions help you begin.
+
+4
+00:00:29,749 --> 00:00:40,487
+Use the plus button to add a new agent. Give the agent a name, an
+emoji, a color, a simple role, and plain instructions for how it
+should help.
+
+5
+00:00:41,187 --> 00:00:49,895
+You can also create group chats with more than one agent. In a group,
+type @Name when you want to speak to one specific teammate.
+
+6
+00:00:50,595 --> 00:01:02,227
+Chat with Frog the same way you would chat with a coworker. Agents can
+read and write files, research the web, use a browser, run commands,
+and ask other agents for help.
+
+7
+00:01:02,927 --> 00:01:14,195
+When an agent wants to do something important, Frog Bot asks first.
+You can allow it, say no, open details, or stop the work at the top of
+the chat.
+
+8
+00:01:14,895 --> 00:01:24,277
+After you approve an action, the agent continues and reports what
+happened. This keeps you in control while still letting the team do
+real work.
+
+9
+00:01:24,977 --> 00:01:36,635
+The About panel shows how an agent is set up. You can edit its name
+and instructions, choose its brain, pick which apps it can use, and
+decide whether it can work on its own.
+
+10
+00:01:37,335 --> 00:01:45,338
+The Screen tab lets you monitor the agent's computer. You can see its
+live steps, so you always know what it is doing.
+
+11
+00:01:46,038 --> 00:01:58,920
+Integrations connect Frog Bot to the tools you already use. You can
+connect ROS and the browser, and add apps like Slack, Notion, GitHub,
+Linear, or custom apps.
+
+12
+00:01:59,620 --> 00:02:08,723
+To add another app, fill in the server address and a token if one is
+needed. Then click Add, and the app becomes available to your agents.
+
+13
+00:02:09,423 --> 00:02:17,816
+The Logs tab shows a live record of everything that happens. You can
+filter it, copy it, or save it when you need to review the work.
+
+14
+00:02:18,516 --> 00:02:30,854
+Settings are where you manage the basics. You can update your API key,
+team name, default brain, startup options, screen learning, and where
+files are stored.
+
+15
+00:02:31,554 --> 00:02:41,492
+That is the flow of Frog Bot. Create agents, give them work, watch
+their progress, connect your apps, and find shared files whenever you
+need them.

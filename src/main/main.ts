@@ -129,6 +129,8 @@ function createEngine() {
     host,
     envApiKey: smokeDir && !process.env.FROG_SMOKE_LIVE ? undefined : apiKeyFromEnv(),
     envOpenAiKey: smokeDir && !process.env.FROG_SMOKE_LIVE ? undefined : openAiKeyFromEnv(),
+    // The self-test must never open a real sign-in in the user's browser.
+    allowSignIn: !smokeDir,
   });
   if (!encryption) created.log.warn('app', 'OS keychain encryption unavailable; secrets are stored unencrypted in state/secrets.json');
   return created;

@@ -61,6 +61,14 @@ export function engineEnv(apiKey: string, engineDir: string, base: NodeJS.Proces
   return env;
 }
 
+/** Plain-language versions of common Claude API problems. */
+export function friendlyClaudeError(error: string) {
+  if (/invalid api key|authentication|401|x-api-key/i.test(error)) return 'Claude rejected the API key. Check it in Settings.';
+  if (/credit balance|billing|402|insufficient/i.test(error)) return 'The Claude account is out of credit. Add credit at console.anthropic.com.';
+  if (/rate.?limit|429|overloaded|529/i.test(error)) return 'Claude is busy or rate limited right now. Try again in a minute.';
+  return error;
+}
+
 function toolResultText(content: unknown): { text: string; image?: string } {
   if (typeof content === 'string') return { text: content };
   if (!Array.isArray(content)) return { text: '' };
@@ -140,6 +148,13 @@ export class ClaudeRunner implements TurnRunner {
               }
               break;
             }
+            if (message.error) {
+              // The engine reports API problems (bad key, no credit…) as a fake
+              // assistant reply; show it once, as an error, not as the agent talking.
+              log.warn(source, 'Assistant message error', message.error);
+              streamed = '';
+              break;
+            }
             for (const block of message.message.content) {
               if (block.type === 'text' && block.text.trim()) {
                 sink.textDone(block.text);
@@ -148,7 +163,6 @@ export class ClaudeRunner implements TurnRunner {
                 sink.tool(block.id, block.name, block.input as Record<string, unknown>);
               }
             }
-            if (message.error) log.warn(source, 'Assistant message error', message.error);
             break;
           }
           case 'user': {
@@ -168,7 +182,7 @@ export class ClaudeRunner implements TurnRunner {
               sink.done({ ok: true, costUsd: message.total_cost_usd });
             } else {
               const error = message.subtype === 'success' ? message.result : message.errors.join('\n') || message.subtype;
-              sink.done({ ok: false, costUsd: message.total_cost_usd ?? 0, error });
+              sink.done({ ok: false, costUsd: message.total_cost_usd ?? 0, error: friendlyClaudeError(error) });
             }
             break;
           }
