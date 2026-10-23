@@ -29,7 +29,8 @@ for (let run = 1; run <= runs; run++) {
     });
     let stderr = '';
     child.stderr.on('data', (d) => (stderr += d));
-    const timer = setTimeout(() => child.kill(), 5 * 60_000);
+    // Live runs wait on a real AI model, so they get longer.
+    const timer = setTimeout(() => child.kill(), (live ? 15 : 5) * 60_000);
     child.on('exit', (c) => {
       clearTimeout(timer);
       if (c !== 0 && stderr.trim()) fs.writeFileSync(path.join(dir, 'stderr.txt'), stderr);

@@ -185,7 +185,8 @@ export class OpenAIRunner implements TurnRunner {
 
       for (let step = 0; step < MAX_STEPS; step++) {
         if (req.abort.signal.aborted) throw new Error('Stopped');
-        const reasoning = /^(gpt-5|o\d)/.test(req.model) ? { reasoning_effort: (req.saver && req.fast ? 'low' : 'medium') as 'low' | 'medium' } : {};
+        // No reasoning_effort here: OpenAI rejects it together with tools on
+        // newer models in chat completions (400). The model's default is used.
         const stream = await client.chat.completions.create(
           {
             model: req.model,
@@ -193,7 +194,6 @@ export class OpenAIRunner implements TurnRunner {
             tools: currentTools(),
             stream: true,
             stream_options: { include_usage: true },
-            ...reasoning,
           },
           { signal: req.abort.signal },
         );

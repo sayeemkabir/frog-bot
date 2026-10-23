@@ -51,24 +51,64 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     const image = await window.webContents.capturePage(undefined, { stayAwake: true });
     fs.writeFileSync(path.join(outDir, `${name}.png`), image.toPNG());
   };
-  const click = (selector: string) => js<boolean>(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.click(); return true; })()`);
-  const typeInto = (selector: string, value: string) =>
-    js<boolean>(`(() => {
-      const el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) return false;
-      const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(value)});
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    })()`);
+  // FROG_SMOKE_VISIBLE: run on screen at a pace a person can follow, with captions.
+  const visible = Boolean(process.env.FROG_SMOKE_VISIBLE);
+  const pause = (ms = 900) => (visible ? sleep(ms) : Promise.resolve());
+  const caption = async (text: string) => {
+    if (!visible) return;
+    await js(`(() => {
+      let el = document.getElementById('live-test-caption');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'live-test-caption';
+        el.style.cssText = 'position:fixed;left:50%;bottom:118px;transform:translateX(-50%);z-index:99999;pointer-events:none;' +
+          'padding:10px 18px;border-radius:999px;background:rgba(10,30,20,.92);border:1px solid rgba(61,220,132,.6);' +
+          'color:#e9fff1;font:600 15px/1.3 Segoe UI,sans-serif;box-shadow:0 10px 40px rgba(0,0,0,.5);max-width:80%;text-align:center';
+        document.body.appendChild(el);
+      }
+      el.textContent = '🧪 Live test · ' + ${JSON.stringify(text)};
+    })()`).catch(() => undefined);
+    await sleep(1200);
+  };
+  const click = async (selector: string) => {
+    const ok = await js<boolean>(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.click(); return true; })()`);
+    await pause();
+    return ok;
+  };
+  const typeInto = async (selector: string, value: string) => {
+    const set = (v: string) =>
+      js<boolean>(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)});
+        if (!el) return false;
+        const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(v)});
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      })()`);
+    if (!visible) return set(value);
+    // Type it out so the viewer can read along.
+    for (let i = 4; i < value.length; i += 4) {
+      await set(value.slice(0, i));
+      await sleep(30);
+    }
+    const ok = await set(value);
+    await pause(600);
+    return ok;
+  };
 
   try {
-    // Run off-screen and without focus so a self-test is never mistaken for the real app.
-    window.setTitle('Frog Bot (self-test)');
-    window.setSkipTaskbar(true);
-    window.setFocusable(false);
-    window.setBounds({ x: -20000, y: -20000, width: 1360, height: 860 });
-    window.showInactive();
+    if (visible) {
+      window.setTitle('Frog Bot (live test)');
+      window.setBounds({ x: 80, y: 40, width: 1360, height: 860 });
+      window.show();
+    } else {
+      // Run off-screen and without focus so a self-test is never mistaken for the real app.
+      window.setTitle('Frog Bot (self-test)');
+      window.setSkipTaskbar(true);
+      window.setFocusable(false);
+      window.setBounds({ x: -20000, y: -20000, width: 1360, height: 860 });
+      window.showInactive();
+    }
 
     check('UI loads', await waitFor(`document.querySelector('[data-testid="app-ready"]')`, 20000));
     if (!process.env.FROG_SMOKE_LIVE) check('Onboarding shows when there is no API key', await waitFor(`document.querySelector('[data-testid="onboarding"]')`, 5000));
@@ -83,6 +123,7 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     await shot('02-home');
 
     // Create an agent through the real dialog.
+    await caption("Creating a new agent with the + button");
     await click('[data-testid="new-menu"]');
     check('New menu opens', await waitFor(`document.querySelector('[data-testid="new-agent"]')`));
     await click('[data-testid="new-agent"]');
@@ -97,6 +138,7 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     check('New agent opens its chat', await waitFor(`document.querySelector('[data-testid="chat-title"]')?.textContent.includes('Docs Guy')`));
 
     // Group chat.
+    await caption("Making a group chat");
     const agents = engine.snapshot().agents;
     const group = engine.createGroup('Sam Bots', agents.map((a) => a.id));
     check('Group created', Boolean(group.id));
@@ -106,6 +148,7 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     await shot('04-group');
 
     // Sending without a key surfaces a clear error in the chat.
+    await caption("Saying hi to Frog (a real AI reply)");
     const frogThread = engine.snapshot().conversations.find((c) => c.kind === 'direct' && c.title === 'Frog')!;
     await click(`[data-conversation-id="${frogThread.id}"]`);
     await waitFor(`document.querySelector('[data-testid="composer"]')`);
@@ -128,13 +171,52 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
       await click('[data-testid="send"]');
       check('Live: approval card shown', await waitFor(`document.querySelector('[data-testid="approval-card"]')`, 120_000));
       await shot('05b-approval');
+      await caption('Frog asked before running a command. Clicking Allow…');
       await click('[data-testid="approve"]');
       const done = Date.now() + 120_000;
       while (Date.now() < done && engine.snapshot().runtimes[frogThread.memberIds[0]]?.status !== 'idle') await sleep(500);
+      check('Live: command ran after approval', engine.messages(frogThread.id).some((m) => m.author.kind === 'agent' && m.kind === 'text' && /hello\s+from\s+frog\s+bot/i.test(m.text)));
       await shot('05c-approved');
+
+      // Real teamwork: Frog hands a job to a new teammate inside a group, in Auto mode.
+      await caption('Adding a teammate called Dog and a group for the two of them');
+      const { agent: dog } = engine.createAgent({ name: 'Dog', label: 'Writes short pieces', emoji: '🐶', color: '#ffb74d', instructions: 'When a teammate gives you a writing job, do it and save it where they say. Keep it short.' });
+      const team = engine.createGroup('Live test team', [frogThread.memberIds[0], dog.id]);
+      await sleep(400);
+      await click(`[data-conversation-id="${team.id}"]`);
+      await waitFor(`document.querySelector('[data-testid="chat-title"]')?.textContent.includes('Live test team')`);
+      await caption('Switching the group to Auto mode (same as Shift+Tab)');
+      for (let i = 0; i < 3 && !(await js<boolean>(`Boolean(document.querySelector('[data-testid="mode-chip"]')?.textContent.includes('Auto'))`)); i++) {
+        await click('[data-testid="mode-chip"]');
+      }
+      check('Live: group switched to Auto', engine.conversation(team.id)?.mode === 'auto');
+      await caption('Asking Frog to get Dog to write a haiku into the shared folder');
+      await typeInto('[data-testid="composer"]', '@Frog please ask Dog to write a 3-line haiku about frogs and save it as frog-haiku.md in the shared folder. Tell me when it is done.');
+      await click('[data-testid="send"]');
+      const haiku = path.join(engine.paths.sharedDir, 'frog-haiku.md');
+      const teamEnd = Date.now() + 240_000;
+      let sawTogether = false;
+      while (Date.now() < teamEnd) {
+        if (!sawTogether && (await js<boolean>(`Boolean(document.querySelector('.working-bubble'))`).catch(() => false))) {
+          sawTogether = true;
+          await caption('Watch: the glowing bubbles show who is working, live');
+          await shot('17-live-working');
+        }
+        const busy = Object.values(engine.snapshot().runtimes).some((r) => r.status === 'working' || r.status === 'waiting');
+        if (fs.existsSync(haiku) && !busy) break;
+        await sleep(700);
+      }
+      check('Live: work shown as it happened', sawTogether);
+      check('Live: Frog handed the job to Dog in the group', engine.messages(team.id).some((m) => m.kind === 'relay' && m.relay?.toAgentId === dog.id));
+      check('Live: Dog saved the haiku to the shared folder', fs.existsSync(haiku), fs.existsSync(haiku) ? fs.readFileSync(haiku, 'utf8').trim() : 'missing');
+      check('Live: Dog replied in the group', engine.messages(team.id).some((m) => m.author.kind === 'agent' && m.author.agentId === dog.id && m.kind === 'text'));
+      await caption('Done: Dog wrote the haiku and saved it');
+      await shot('18-live-teamwork-done');
+      await click(`[data-conversation-id="${frogThread.id}"]`);
     }
 
     // Right panel tabs.
+    await caption("Opening Frog's panel: settings, files, screen");
     await click('[data-testid="toggle-panel"]');
     check('Agent panel opens', await waitFor(`document.querySelector('[data-testid="panel"]')`));
     for (const tab of ['details', 'library', 'computer']) {
@@ -146,6 +228,7 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     check('Agent panel closes', await waitFor(`!document.querySelector('[data-testid="panel"]')`));
 
     // Integrations sheet.
+    await caption("Checking Integrations (ROS and the browser)");
     await click('[data-testid="open-integrations"]');
     check('Integrations sheet opens', await waitFor(`document.querySelector('[data-testid="integrations-sheet"]')`));
     check('ROS card shown', await waitFor(`document.querySelector('[data-integration-id="ros"]')`));
@@ -158,6 +241,7 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     await waitFor(`!document.querySelector('[data-testid="integrations-sheet"]')`);
 
     // Logs tab.
+    await caption("Checking the Logs tab and Settings");
     await click('[data-testid="nav-logs"]');
     check('Logs view opens', await waitFor(`document.querySelector('[data-testid="logs-view"]')`));
     check('Logs show timestamped lines', await waitFor(`[...document.querySelectorAll('[data-testid="log-line"]')].length > 5`));
@@ -224,5 +308,9 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
 
   const failed = checks.filter((c) => !c.ok);
   fs.writeFileSync(path.join(outDir, 'results.json'), JSON.stringify({ passed: checks.length - failed.length, failed: failed.length, checks }, null, 2));
+  if (visible) {
+    await caption(failed.length ? `Finished: ${checks.length - failed.length} passed, ${failed.length} failed` : `Finished: all ${checks.length} checks passed ✅`);
+    await sleep(15000);
+  }
   return failed.length ? 1 : 0;
 }
