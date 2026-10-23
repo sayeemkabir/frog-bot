@@ -21,6 +21,22 @@ class NeedsSignIn extends Error {
 }
 
 /**
+ * How to sign in to one server. Servers that register clients automatically
+ * need only a scope. Others (like Slack) need the user's own app: its client
+ * ID/secret, kept encrypted under `oauthapp:<id>`, and a fixed local port so
+ * the redirect address can be registered in that app once.
+ */
+export interface SignInOptions {
+  scope?: string;
+  port?: number;
+}
+
+interface OwnApp {
+  clientId: string;
+  clientSecret?: string;
+}
+
+/**
  * Remembers one integration's OAuth client registration and tokens. When
  * `interactive` is false it never opens a browser: if the tokens cannot be
  * refreshed silently it throws NeedsSignIn instead.
@@ -36,6 +52,7 @@ class StoredProvider implements OAuthClientProvider {
     private interactive: boolean,
     private openBrowser: (url: string) => Promise<void>,
     private scope?: string,
+    private app?: OwnApp,
   ) {}
 
   get redirectUrl() { return this.redirect; }
@@ -46,7 +63,7 @@ class StoredProvider implements OAuthClientProvider {
       redirect_uris: [this.redirect],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
-      token_endpoint_auth_method: 'none',
+      token_endpoint_auth_method: this.app?.clientSecret ? 'client_secret_post' : 'none',
       ...(this.scope ? { scope: this.scope } : {}),
     };
   }
@@ -54,11 +71,14 @@ class StoredProvider implements OAuthClientProvider {
   state() { return this.expectedState; }
   get stateValue() { return this.expectedState; }
 
-  clientInformation() {
+  clientInformation(): OAuthClientInformationMixed | undefined {
+    if (this.app) return { client_id: this.app.clientId, ...(this.app.clientSecret ? { client_secret: this.app.clientSecret } : {}) };
     return parse<OAuthClientInformationMixed>(this.secrets.get(key(this.id, 'client')));
   }
 
   saveClientInformation(info: OAuthClientInformationMixed) {
+    // The user's own app is never replaced by a registration.
+    if (this.app) return;
     this.secrets.set(key(this.id, 'client'), JSON.stringify(info));
   }
 
@@ -81,7 +101,7 @@ class StoredProvider implements OAuthClientProvider {
   codeVerifier() { return this.verifier; }
 
   invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery') {
-    if (scope === 'all' || scope === 'client') this.secrets.delete(key(this.id, 'client'));
+    if ((scope === 'all' || scope === 'client') && !this.app) this.secrets.delete(key(this.id, 'client'));
     if (scope === 'all' || scope === 'tokens') {
       this.secrets.delete(key(this.id, 'tokens'));
       this.secrets.delete(key(this.id, 'savedAt'));
@@ -130,18 +150,30 @@ export class McpOAuth {
     return Boolean(this.secrets.get(key(id, 'tokens')));
   }
 
-  forget(id: string) {
+  /** Signs out. Keeps the user's own app details unless `everything` (used when the integration is removed). */
+  forget(id: string, everything = false) {
     for (const part of ['client', 'tokens', 'savedAt', 'redirect']) this.secrets.delete(key(id, part));
+    if (everything) this.secrets.delete(`oauthapp:${id}`);
+  }
+
+  /** Remember the user's own app (client ID and secret) for a server without automatic registration. */
+  setOwnApp(id: string, clientId: string, clientSecret?: string) {
+    this.secrets.set(`oauthapp:${id}`, JSON.stringify({ clientId: clientId.trim(), ...(clientSecret?.trim() ? { clientSecret: clientSecret.trim() } : {}) }));
+  }
+
+  private ownApp(id: string) {
+    const app = parse<OwnApp>(this.secrets.get(`oauthapp:${id}`));
+    return app?.clientId ? app : undefined;
   }
 
   /** A valid access token without any user interaction, or undefined. */
-  accessToken(id: string, serverUrl: string, scope?: string): Promise<string | undefined> {
-    return this.once(`token:${id}`, () => this.accessTokenNow(id, serverUrl, scope));
+  accessToken(id: string, serverUrl: string, opts: SignInOptions = {}): Promise<string | undefined> {
+    return this.once(`token:${id}`, () => this.accessTokenNow(id, serverUrl, opts.scope));
   }
 
   /** Full sign-in. Opens the browser if needed and waits for the user to approve. */
-  signIn(id: string, serverUrl: string, scope?: string): Promise<void> {
-    return this.once(`signin:${id}`, () => this.signInNow(id, serverUrl, scope));
+  signIn(id: string, serverUrl: string, opts: SignInOptions = {}): Promise<void> {
+    return this.once(`signin:${id}`, () => this.signInNow(id, serverUrl, opts));
   }
 
   private async accessTokenNow(id: string, serverUrl: string, scope?: string): Promise<string | undefined> {
@@ -155,7 +187,7 @@ export class McpOAuth {
     if (!tokens.refresh_token) return undefined;
 
     const redirect = this.secrets.get(key(id, 'redirect')) || `http://127.0.0.1:1${CALLBACK_PATH}`;
-    const provider = new StoredProvider(id, this.secrets, redirect, false, this.openBrowser, scope);
+    const provider = new StoredProvider(id, this.secrets, redirect, false, this.openBrowser, scope, this.ownApp(id));
     try {
       const result = await auth(provider, { serverUrl, scope });
       if (result === 'AUTHORIZED') {
@@ -168,9 +200,12 @@ export class McpOAuth {
     return undefined;
   }
 
-  private async signInNow(id: string, serverUrl: string, scope?: string): Promise<void> {
-    const { server, port } = await this.listen(Number(this.secrets.get(key(id, 'port')) || 0));
-    const redirect = `http://127.0.0.1:${port}${CALLBACK_PATH}`;
+  private async signInNow(id: string, serverUrl: string, { scope, port: fixedPort }: SignInOptions): Promise<void> {
+    const app = this.ownApp(id);
+    if (fixedPort && !app) throw new Error('Add your app’s Client ID first (see the setup steps), then connect.');
+    // With the user's own app the redirect address must match the one registered in it exactly.
+    const { servers, port } = app && fixedPort ? await this.listenFixed(fixedPort) : await this.listen(Number(this.secrets.get(key(id, 'port')) || 0));
+    const redirect = `http://${app && fixedPort ? 'localhost' : '127.0.0.1'}:${port}${CALLBACK_PATH}`;
     let codePromise: Promise<string> | undefined;
     let cancelWait = () => {};
     try {
@@ -183,9 +218,9 @@ export class McpOAuth {
       const provider = new StoredProvider(id, this.secrets, redirect, true, async (url) => {
         this.log.info(`oauth:${id}`, 'Opening browser for sign-in', url.split('?')[0]);
         await this.openBrowser(url);
-      }, scope);
+      }, scope, app);
 
-      const waiting = this.waitForCode(server, provider.stateValue);
+      const waiting = this.waitForCode(servers, provider.stateValue);
       codePromise = waiting.promise;
       cancelWait = waiting.cancel;
       const first = await auth(provider, { serverUrl, scope });
@@ -201,11 +236,11 @@ export class McpOAuth {
       // Never leave the 5-minute timer or a dangling rejection behind.
       cancelWait();
       codePromise?.catch(() => undefined);
-      server.close();
+      for (const server of servers) server.close();
     }
   }
 
-  private listen(preferredPort: number): Promise<{ server: http.Server; port: number }> {
+  private listen(preferredPort: number): Promise<{ servers: http.Server[]; port: number }> {
     return new Promise((resolve, reject) => {
       const server = http.createServer();
       const onError = (err: NodeJS.ErrnoException) => {
@@ -216,16 +251,39 @@ export class McpOAuth {
       server.once('error', onError);
       server.listen(preferredPort, '127.0.0.1', () => {
         server.off('error', onError);
-        resolve({ server, port: (server.address() as AddressInfo).port });
+        resolve({ servers: [server], port: (server.address() as AddressInfo).port });
       });
     });
   }
 
-  private waitForCode(server: http.Server, expectedState: string): { promise: Promise<string>; cancel: () => void } {
+  /**
+   * Listen on exactly this port for "localhost", which a browser may reach over
+   * IPv4 or IPv6, so both loopback addresses are covered. Never another port:
+   * the address is registered in the user's app and must match.
+   */
+  private async listenFixed(port: number): Promise<{ servers: http.Server[]; port: number }> {
+    const open = (host: string) =>
+      new Promise<http.Server>((resolve, reject) => {
+        const server = http.createServer();
+        server.once('error', reject);
+        server.listen(port, host, () => resolve(server));
+      });
+    let v4: http.Server;
+    try {
+      v4 = await open('127.0.0.1');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') throw new Error(`Port ${port} is busy (another sign-in may be open). Close it and try again.`);
+      throw err;
+    }
+    const v6 = await open('::1').catch(() => undefined);
+    return { servers: v6 ? [v4, v6] : [v4], port };
+  }
+
+  private waitForCode(servers: http.Server[], expectedState: string): { promise: Promise<string>; cancel: () => void } {
     let timer: NodeJS.Timeout | undefined;
     const promise = new Promise<string>((resolve, reject) => {
       timer = setTimeout(() => reject(new Error('Sign-in timed out after 5 minutes')), SIGN_IN_TIMEOUT_MS);
-      server.on('request', (req, res) => {
+      for (const server of servers) server.on('request', (req, res) => {
         const url = new URL(req.url || '/', 'http://127.0.0.1');
         if (url.pathname !== CALLBACK_PATH) {
           res.writeHead(404).end();

@@ -159,6 +159,18 @@ export interface IntegrationTemplate {
   url?: string;
   auth: IntegrationAuth;
   fields?: IntegrationField[];
+  /** OAuth scopes to ask for when signing in. */
+  scope?: string;
+  /**
+   * For servers without automatic client registration (like Slack): sign in
+   * through the user's own registered app on this fixed local port, so the
+   * redirect address can be registered once in that app.
+   */
+  oauthPort?: number;
+  /** Short setup steps shown above the form. */
+  help?: string;
+  /** An app manifest the user pastes into the service to create their own app (copied by a button). */
+  manifest?: unknown;
 }
 
 export interface Integration {
@@ -171,6 +183,8 @@ export interface Integration {
   command?: string;
   args?: string[];
   auth: IntegrationAuth;
+  scope?: string;
+  oauthPort?: number;
   builtin?: boolean;
   autoConnect?: boolean;
   enabled: boolean;

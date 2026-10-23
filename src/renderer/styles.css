@@ -640,3 +640,7 @@ a { color: var(--accent); }
 @keyframes pass { 0% { left: 0%; } 50% { left: calc(100% - 10px); } 100% { left: 0%; } }
 @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 @keyframes fly { from { transform: translateX(-12px) scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Setup steps above an integration form */
+.setup-help { display: grid; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(79,195,247,.3); background: rgba(79,195,247,.08); }
+.setup-help p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text); }

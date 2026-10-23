@@ -2,10 +2,22 @@
   "workspaceName": "Webshapers Agency",
   "defaultModel": "claude-opus-5-5",
   "models": [
-    { "id": "claude-opus-5-5", "label": "Claude Opus 5.5" },
-    { "id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5" },
-    { "id": "claude-haiku-5-5", "label": "Claude Haiku 5.5" },
-    { "id": "claude-fable-5-1", "label": "Claude Fable 5.1" }
+    {
+      "id": "claude-opus-5-5",
+      "label": "Claude Opus 5.5"
+    },
+    {
+      "id": "claude-sonnet-5-5",
+      "label": "Claude Sonnet 5.5"
+    },
+    {
+      "id": "claude-haiku-5-5",
+      "label": "Claude Haiku 5.5"
+    },
+    {
+      "id": "claude-fable-5-1",
+      "label": "Claude Fable 5.1"
+    }
   ],
   "integrations": [
     {
@@ -37,12 +49,67 @@
       "description": "Read channels, collect requests, and post on your behalf (always asks first).",
       "icon": "💬",
       "transport": "http",
-      "url": "",
+      "url": "https://mcp.slack.com/mcp",
       "auth": "oauth",
+      "oauthPort": 3119,
+      "scope": "search:read.public search:read.private search:read.mpim search:read.im search:read.files search:read.users channels:history groups:history mpim:history im:history channels:read groups:read im:read mpim:read chat:write reactions:read reactions:write users:read users:read.email files:read canvases:read canvases:write",
+      "help": "Slack only lets in apps you own, so you make a small free one, once: 1) Press Copy Slack app manifest below. 2) Open api.slack.com/apps → Create New App → From a manifest → pick your workspace → paste → Create. 3) Click Install to Workspace → Allow. 4) Open Basic Information, copy the Client ID and Client Secret into the boxes below, and press Add. Your browser opens Slack: click Allow.",
       "fields": [
-        { "key": "url", "label": "Slack MCP server URL", "placeholder": "https://mcp.slack.com/mcp" },
-        { "key": "token", "label": "Token (leave empty to sign in with OAuth)", "placeholder": "xoxp-…", "secret": true }
-      ]
+        {
+          "key": "clientId",
+          "label": "Client ID (from your Slack app's Basic Information)",
+          "placeholder": "1234567890.1234567890123"
+        },
+        {
+          "key": "clientSecret",
+          "label": "Client Secret",
+          "placeholder": "••••••••",
+          "secret": true
+        }
+      ],
+      "manifest": {
+        "display_information": {
+          "name": "Frog Bot",
+          "description": "Lets your Frog Bot agents read, search and (with your OK) post in Slack as you.",
+          "background_color": "#0b1a12"
+        },
+        "oauth_config": {
+          "redirect_urls": [
+            "http://localhost:3119/oauth/callback"
+          ],
+          "scopes": {
+            "user": [
+              "search:read.public",
+              "search:read.private",
+              "search:read.mpim",
+              "search:read.im",
+              "search:read.files",
+              "search:read.users",
+              "channels:history",
+              "groups:history",
+              "mpim:history",
+              "im:history",
+              "channels:read",
+              "groups:read",
+              "im:read",
+              "mpim:read",
+              "chat:write",
+              "reactions:read",
+              "reactions:write",
+              "users:read",
+              "users:read.email",
+              "files:read",
+              "canvases:read",
+              "canvases:write"
+            ]
+          }
+        },
+        "settings": {
+          "org_deploy_enabled": false,
+          "socket_mode_enabled": false,
+          "token_rotation_enabled": false
+        }
+      }
     },
     {
       "id": "notion",
@@ -52,7 +119,13 @@
       "transport": "http",
       "url": "https://mcp.notion.com/mcp",
       "auth": "oauth",
-      "fields": [{ "key": "url", "label": "Server URL", "placeholder": "https://mcp.notion.com/mcp" }]
+      "fields": [
+        {
+          "key": "url",
+          "label": "Server URL",
+          "placeholder": "https://mcp.notion.com/mcp"
+        }
+      ]
     },
     {
       "id": "github",
@@ -63,8 +136,17 @@
       "url": "https://api.githubcopilot.com/mcp/",
       "auth": "token",
       "fields": [
-        { "key": "url", "label": "Server URL", "placeholder": "https://api.githubcopilot.com/mcp/" },
-        { "key": "token", "label": "Personal access token", "placeholder": "github_pat_…", "secret": true }
+        {
+          "key": "url",
+          "label": "Server URL",
+          "placeholder": "https://api.githubcopilot.com/mcp/"
+        },
+        {
+          "key": "token",
+          "label": "Personal access token",
+          "placeholder": "github_pat_…",
+          "secret": true
+        }
       ]
     },
     {
@@ -75,7 +157,13 @@
       "transport": "http",
       "url": "https://mcp.linear.app/mcp",
       "auth": "oauth",
-      "fields": [{ "key": "url", "label": "Server URL", "placeholder": "https://mcp.linear.app/mcp" }]
+      "fields": [
+        {
+          "key": "url",
+          "label": "Server URL",
+          "placeholder": "https://mcp.linear.app/mcp"
+        }
+      ]
     },
     {
       "id": "custom-http",
@@ -86,9 +174,22 @@
       "url": "",
       "auth": "oauth",
       "fields": [
-        { "key": "name", "label": "Name", "placeholder": "Neeto Desk" },
-        { "key": "url", "label": "Server URL", "placeholder": "https://example.com/mcp" },
-        { "key": "token", "label": "Token (optional)", "placeholder": "Leave empty to use OAuth", "secret": true }
+        {
+          "key": "name",
+          "label": "Name",
+          "placeholder": "Neeto Desk"
+        },
+        {
+          "key": "url",
+          "label": "Server URL",
+          "placeholder": "https://example.com/mcp"
+        },
+        {
+          "key": "token",
+          "label": "Token (optional)",
+          "placeholder": "Leave empty to use OAuth",
+          "secret": true
+        }
       ]
     },
     {
@@ -99,9 +200,21 @@
       "transport": "stdio",
       "auth": "none",
       "fields": [
-        { "key": "name", "label": "Name", "placeholder": "My files server" },
-        { "key": "command", "label": "Command", "placeholder": "npx" },
-        { "key": "args", "label": "Arguments", "placeholder": "-y some-mcp-server --flag" }
+        {
+          "key": "name",
+          "label": "Name",
+          "placeholder": "My files server"
+        },
+        {
+          "key": "command",
+          "label": "Command",
+          "placeholder": "npx"
+        },
+        {
+          "key": "args",
+          "label": "Arguments",
+          "placeholder": "-y some-mcp-server --flag"
+        }
       ]
     }
   ]

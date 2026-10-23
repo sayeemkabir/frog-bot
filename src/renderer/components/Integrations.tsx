@@ -120,6 +120,30 @@ function AddForm({ template, onDone }: { template: IntegrationTemplate; onDone: 
   };
   return (
     <form className="list" style={{ gap: 14 }} onSubmit={submit} data-testid="integration-form">
+      {template.help && (
+        <div className="setup-help" data-testid="integration-help">
+          <p>{template.help}</p>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            {template.manifest !== undefined && (
+              <button
+                type="button"
+                className="btn primary"
+                data-testid="copy-manifest"
+                onClick={() =>
+                  navigator.clipboard
+                    .writeText(JSON.stringify(template.manifest, null, 2))
+                    .then(() => toast('Manifest copied', 'Paste it in Slack: Create New App → From a manifest.', 'success'))
+                }
+              >
+                Copy {template.name} app manifest
+              </button>
+            )}
+            {template.id === 'slack' && (
+              <a className="btn" href="https://api.slack.com/apps?new_app=1" target="_blank" rel="noreferrer">Open api.slack.com/apps ↗</a>
+            )}
+          </div>
+        </div>
+      )}
       {(template.fields ?? []).map((field) => (
         <label key={field.key} className="field">
           <span>{field.label}</span>

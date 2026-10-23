@@ -239,6 +239,15 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     await shot('08-integration-form');
     await click('[data-testid="sheet-close"]');
     await waitFor(`!document.querySelector('[data-testid="integrations-sheet"]')`);
+    // Slack: setup steps and the manifest button for making your own Slack app.
+    await click('[data-testid="open-integrations"]');
+    await waitFor(`document.querySelector('[data-testid="integrations-sheet"]')`);
+    await click('[data-testid="template-slack"]');
+    check('Slack form shows setup steps', await waitFor(`document.querySelector('[data-testid="integration-help"]')?.textContent.includes('api.slack.com/apps')`));
+    check('Slack form offers the app manifest', await waitFor(`document.querySelector('[data-testid="copy-manifest"]')`));
+    await shot('08b-slack-form');
+    await click('[data-testid="sheet-close"]');
+    await waitFor(`!document.querySelector('[data-testid="integrations-sheet"]')`);
 
     // Logs tab.
     await caption("Checking the Logs tab and Settings");

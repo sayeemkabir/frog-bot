@@ -125,13 +125,19 @@ export class Integrations {
       command: values.command?.trim() || undefined,
       args: values.args ? splitArgs(values.args) : undefined,
       auth: values.token ? 'token' : template.auth,
+      ...(template.scope ? { scope: template.scope } : {}),
+      ...(template.oauthPort ? { oauthPort: template.oauthPort } : {}),
       enabled: true,
     };
     if ((integration.transport === 'http' || integration.transport === 'sse') && !integration.url) {
       throw new Error('A server URL is required');
     }
     if (integration.transport === 'stdio' && !integration.command) throw new Error('A command is required');
+    if (integration.auth === 'oauth' && template.oauthPort && !values.clientId?.trim()) {
+      throw new Error(`${template.name} needs your app's Client ID and Client Secret (see the steps above the form)`);
+    }
     if (values.token) this.secrets.set(`token:${id}`, values.token.trim());
+    if (values.clientId?.trim()) this.oauth.setOwnApp(id, values.clientId, values.clientSecret);
     this.userDoc.update((doc) => doc.added.push(integration));
     this.userDoc.flush();
     this.log.info(`integration:${id}`, 'Added', { name, transport: integration.transport, host: integration.url ? new URL(integration.url).host : integration.command });
@@ -150,7 +156,7 @@ export class Integrations {
     });
     this.userDoc.flush();
     this.secrets.delete(`token:${id}`);
-    this.oauth.forget(id);
+    this.oauth.forget(id, true);
     this.status.delete(id);
     this.log.info(`integration:${id}`, 'Removed');
     this.changed();
@@ -189,7 +195,7 @@ export class Integrations {
           this.setStatus({ id, state: 'needs-auth', detail: 'Click Connect to sign in' });
           return this.status.get(id)!;
         }
-        await this.oauth.signIn(id, integration.url!, OAUTH_SCOPES[id]);
+        await this.oauth.signIn(id, integration.url!, this.signInOptions(integration));
         token = await this.bearer(integration);
       }
       const toolCount = await this.probe(integration, token);
@@ -213,7 +219,11 @@ export class Integrations {
     const staticToken = this.secrets.get(`token:${integration.id}`);
     if (staticToken) return staticToken;
     if (integration.auth !== 'oauth' || !integration.url) return undefined;
-    return this.oauth.accessToken(integration.id, integration.url, OAUTH_SCOPES[integration.id]);
+    return this.oauth.accessToken(integration.id, integration.url, this.signInOptions(integration));
+  }
+
+  private signInOptions(integration: Integration) {
+    return { scope: integration.scope ?? OAUTH_SCOPES[integration.id], port: integration.oauthPort };
   }
 
   private async probe(integration: Integration, token?: string) {
