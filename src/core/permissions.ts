@@ -76,17 +76,42 @@ export function toolIntent(name: string): 'read' | 'outbound' | 'delete' | 'muta
   return 'unknown';
 }
 
-const DESTRUCTIVE_SHELL = [
-  /\brm\s+(-[a-z]*r|--recursive|-[a-z]*f)/i,
-  /\b(rmdir|rd|ri|erase|del|remove-item|clear-content|clear-item)\b/i,
-  /\bformat(-volume)?\b|\bmkfs|\bdiskpart\b|\bfdisk\b/i,
-  /\bshutdown\b|\brestart-computer\b|\bstop-computer\b/i,
-  /\bgit\s+(push\b.*(--force|-f\b)|reset\s+--hard|clean\s+-[a-z]*[fdx])/i,
-  /\bdrop\s+(table|database|schema)\b|\btruncate\s+table\b|\bdelete\s+from\b/i,
-  /\breg\s+delete\b|\bset-executionpolicy\b|\bbcdedit\b/i,
-  /\bchmod\s+-r\b|\bchown\s+-r\b/i,
-  /\b(curl|wget|iwr|invoke-webrequest|irm|invoke-restmethod)\b[^|]*\|\s*(sh|bash|iex|invoke-expression|powershell)/i,
+/** Commands (the program being run, not words inside arguments) that delete, wipe or take down. */
+const DESTRUCTIVE_PROGRAMS = new Set([
+  'rmdir', 'rd', 'del', 'erase', 'ri', 'remove-item', 'clear-content', 'clear-item', 'clear-recyclebin',
+  'format', 'format-volume', 'clear-disk', 'initialize-disk', 'diskpart', 'fdisk', 'mkfs', 'wipefs', 'shred',
+  'shutdown', 'restart-computer', 'stop-computer', 'bcdedit', 'set-executionpolicy',
+]);
+
+/** Whole-command patterns that are destructive wherever they appear. */
+const DESTRUCTIVE_ANYWHERE = [
+  /\bgit\s+(push\b[^\n]*(--force\b|\s-f\b)|reset\s+--hard|clean\s+-[a-z]*[fdx])/i,
+  /\bdrop\s+(table|database|schema)\b|\btruncate\s+table\b|\bdelete\s+from\s+\w/i,
+  /\breg(\.exe)?\s+delete\b/i,
+  // Downloading a script and running it straight away.
+  /\b(curl|wget|iwr|invoke-webrequest|irm|invoke-restmethod)\b[^|\n]*\|\s*(sh|bash|zsh|iex|invoke-expression|powershell|pwsh)\b/i,
 ];
+
+/**
+ * True when a shell command line would delete, wipe or take down something.
+ * Looks at the program each step of the line runs (after ;, &&, ||, |, or a
+ * new line), so a word like "format" inside data or text does not count.
+ */
+export function isDestructiveCommand(command: string) {
+  if (DESTRUCTIVE_ANYWHERE.some((re) => re.test(command))) return true;
+  for (const step of command.split(/\r?\n|;|&&|\|\||\||&/)) {
+    const words = step.trim().replace(/^[({\s]+/, '').split(/\s+/).filter(Boolean);
+    while (words.length && /^(sudo|doas|call|cmd(\.exe)?|\/c|start|nohup|time|exec)$/i.test(words[0])) words.shift();
+    if (!words.length) continue;
+    const program = words[0].replace(/^.*[\\/]/, '').replace(/\.(exe|cmd|bat)$/i, '').toLowerCase();
+    const args = words.slice(1).join(' ');
+    if (DESTRUCTIVE_PROGRAMS.has(program) || program.startsWith('mkfs')) return true;
+    // rm (and PowerShell's rm alias for Remove-Item) only when recursive or forced.
+    if (program === 'rm' && /(^|\s)(-[a-z]*[rf][a-z]*|--recursive|--force|-recurse|-force)\b/i.test(args)) return true;
+    if ((program === 'chmod' || program === 'chown') && /(^|\s)-[a-z]*r/i.test(args)) return true;
+  }
+  return false;
+}
 
 /** Files whose contents are keys, passwords or tokens: reading them always asks. */
 const SENSITIVE_FILE = /(^|[\\/])(\.env(\.[^\\/]*)?|[^\\/]*credential[^\\/]*|[^\\/]*\.pem|[^\\/]*\.key|id_rsa[^\\/]*|id_ed25519[^\\/]*|secrets\.json|\.npmrc|\.netrc|\.git-credentials|login data|cookies)$/i;
@@ -189,7 +214,7 @@ export function classifyTool(toolName: string, rawInput: unknown, ctx: Permissio
 
   if (isShell) {
     const command = String(input.command ?? '');
-    if (DESTRUCTIVE_SHELL.some((re) => re.test(command))) return ask('command can delete or overwrite data', false, false);
+    if (isDestructiveCommand(command)) return ask('command can delete or overwrite data', false, false);
     if (commandTouchesSecrets(command)) return ask('command touches files that may hold keys', false, false);
     return ctx.autonomy === 'auto' ? allow('autonomous mode: command') : ask('runs a command on this computer', false, false);
   }

@@ -20,3 +20,5 @@ secrets.json
 tutorial/*.mp4
 tutorial/work/
 .engines/
+speed-results.md
+speed-trace.log
