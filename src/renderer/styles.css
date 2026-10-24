@@ -655,3 +655,7 @@ a { color: var(--accent); }
 .mention-option .muted { margin-left: auto; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
 .mention-option.on, .mention-option:hover { background: rgba(255,255,255,.07); }
 .mention-hint { padding: 6px 9px 2px; font-size: 11px; color: var(--text-faint); }
+
+.signin-box { display: grid; gap: 8px; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.03); }
+.signin-box p { margin: 0; font-size: 12.5px; }
+.signin-box .input { flex: 1; }

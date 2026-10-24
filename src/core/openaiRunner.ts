@@ -123,6 +123,13 @@ export class OpenAIRunner implements TurnRunner {
 
   constructor(private opts: OpenAIRunnerOptions) {}
 
+  /** Close one agent's kept-open connections (e.g. so its browser profile can be opened by the user). */
+  async release(agentId: string) {
+    const mine = [...this.warm.entries()].filter(([key]) => key.startsWith(`${agentId}|`));
+    for (const [key] of mine) this.warm.delete(key);
+    await Promise.all(mine.map(([, w]) => w.handle.client.close().catch(() => undefined)));
+  }
+
   /** Close every kept-open connection (on quit). */
   async dispose() {
     const all = [...this.warm.values()];

@@ -30,6 +30,7 @@ import { classifyTool, describeToolCall, isReadOnlyCall } from './permissions';
 import { buildPersona, tailFile } from './persona';
 import { ClaudeRunner, type TurnRunner, type TurnSink } from './runner';
 import { OPENAI_MODEL_PREFERENCE, OpenAIRunner } from './openaiRunner';
+import { openProfileWindow } from './agentBrowser';
 import type { SecretBox } from './secrets';
 import { JsonDoc, acquireLock, newId, onSaveError } from './store';
 
@@ -810,6 +811,22 @@ export class FrogEngine {
         },
       });
     });
+  }
+
+  /**
+   * Open the agent's browser profile in a normal window so the user can sign in
+   * to a site (or finish a 2FA step). The agent's own browser is closed first,
+   * because one profile can only be open in one window at a time.
+   */
+  async openAgentBrowser(agentId: ID, url?: string) {
+    const agent = this.agent(agentId);
+    if (!agent) throw new Error('Agent not found');
+    if (this.active.has(agentId)) throw new Error(`${agent.name} is using its browser right now. Use the window it has open, or stop the task first.`);
+    await this.openaiRunner.release(agentId);
+    const raw = url?.trim();
+    const target = raw ? (/^https?:\/\//i.test(raw) ? raw : `https://${raw}`) : undefined;
+    openProfileWindow(this.paths.agentBrowserProfile(agent.folder), target);
+    this.log.info(`agent:${agent.name}`, 'Opened the agent browser for you to sign in', target ? new URL(target).host : undefined);
   }
 
   /**

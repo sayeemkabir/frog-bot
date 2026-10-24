@@ -156,6 +156,7 @@ function buildApi(): FrogApi {
     createGroup: async (title, members) => engine.createGroup(title, members),
     updateGroup: async (id, patch) => engine.updateGroup(id, patch),
     setMode: (id, mode) => engine.setMode(id, mode),
+    openAgentBrowser: (id, url) => engine.openAgentBrowser(id, url),
     deleteConversation: async (id) => engine.deleteConversation(id),
     answerQuestion: (id, answer) => engine.answerQuestion(id, answer),
     decideApproval: (id, decision) => engine.decideApproval(id, decision),

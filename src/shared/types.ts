@@ -319,6 +319,8 @@ export interface FrogApi {
   connectIntegration(id: ID): Promise<IntegrationStatus>;
   disconnectIntegration(id: ID): Promise<void>;
   listFiles(agentId: ID, subPath?: string): Promise<FileEntry[]>;
+  /** Open the agent's own browser in a normal window so you can sign in to a site for it. */
+  openAgentBrowser(agentId: ID, url?: string): Promise<void>;
   openPath(path: string): Promise<void>;
   deleteTask(taskId: ID): Promise<void>;
   logs(limit?: number): Promise<LogEntry[]>;
@@ -339,6 +341,7 @@ export const FROG_API_METHODS: FrogApiMethod[] = [
   'createGroup',
   'updateGroup',
   'setMode',
+  'openAgentBrowser',
   'deleteConversation',
   'answerQuestion',
   'decideApproval',

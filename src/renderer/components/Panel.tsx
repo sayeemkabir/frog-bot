@@ -207,6 +207,26 @@ function formatSize(bytes: number) {
 
 const STATUS_WORDS = { idle: 'resting', working: 'working', waiting: 'waiting for you', error: 'had a problem' } as const;
 
+/** Sign in to a site in the agent's own browser once; it stays signed in for the agent. */
+function SignInBox({ agent, busy }: { agent: Agent; busy: boolean }) {
+  const [url, setUrl] = useState('');
+  const open = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const ok = await attempt(() => api.openAgentBrowser(agent.id, url).then(() => true), 'Could not open the browser');
+    if (ok) toast(`${agent.name}'s browser is open`, 'Sign in there, then close the window. It stays signed in for this agent.', 'success');
+  };
+  return (
+    <form className="signin-box" onSubmit={open} data-testid="signin-box">
+      <div className="subhead">Sign in for {agent.name}</div>
+      <p className="muted">Open {agent.name}'s own browser and log in to a site once. {agent.name} stays signed in. You can also give it a username and password in chat.</p>
+      <div className="row" style={{ gap: 8 }}>
+        <input className="input" placeholder="Website, e.g. mail.google.com" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <button className="btn" disabled={busy} title={busy ? `${agent.name} is using its browser right now` : undefined}>Open browser</button>
+      </div>
+    </form>
+  );
+}
+
 function ComputerTab({ agent }: { agent: Agent }) {
   const runtime = useStore((s) => s.runtimes[agent.id]);
   const busy = runtime?.status === 'working' || runtime?.status === 'waiting';
@@ -225,6 +245,7 @@ function ComputerTab({ agent }: { agent: Agent }) {
           <div className="asleep"><Icon.Moon /> Computer is asleep</div>
         )}
       </div>
+      <SignInBox agent={agent} busy={busy} />
       <div className="row between">
         <span className="subhead">What {agent.name} is doing</span>
         <span className={`chip ${busy ? 'busy' : runtime?.status === 'error' ? 'err' : ''}`}>{STATUS_WORDS[runtime?.status ?? 'idle']}</span>
