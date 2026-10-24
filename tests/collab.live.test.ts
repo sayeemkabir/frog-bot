@@ -114,7 +114,8 @@ describe.skipIf(!live)('agents collaborate to make the tutorial video', () => {
     const transcript = engine.snapshot().conversations.flatMap((c) =>
       engine.messages(c.id).map((m) => `[${c.title}] ${m.author.kind === 'agent' ? engine.snapshot().agents.find((a) => a.id === (m.author as { agentId: string }).agentId)?.name : m.author.kind} (${m.kind}): ${m.text}`),
     );
-    fs.writeFileSync(path.join(out, 'collaboration-log.md'), transcript.join('\n\n'));
+    // This log is published, so never include the real home folder (it holds the user's name).
+    fs.writeFileSync(path.join(out, 'collaboration-log.md'), transcript.join('\n\n').split(os.homedir()).join('C:\\Users\\you').replace(/frog-collab-[A-Za-z0-9]+/g, 'frog-collab'));
     engine.stop();
 
     expect(engine.messages(director.id).some((m) => m.kind === 'relay')).toBe(true);

@@ -2,7 +2,7 @@
 
 <h1 align="center">Frog Bot</h1>
 
-<p align="center">A team of AI agents that lives on your computer, works together, uses your apps, and asks you before it acts for you.</p>
+<p align="center"><b>Your local AI team.</b><br>AI teammates that live on your own computer, work together, use your apps, and ask you before they act for you.<br><a href="https://sayeemkabir.github.io/frogbot/"><b>🌐 Website and downloads</b></a></p>
 
 ---
 

@@ -24,7 +24,7 @@ export function Onboarding() {
       <form className="onboarding-card" onSubmit={save}>
         <Logo className="big-logo" />
         <h1>Welcome to Frog Bot</h1>
-        <p>Your own team of AI agents that live on this computer, work together, and ask you before they act for you.</p>
+        <p>Your local AI team: agents that live on this computer, work together, and ask you before they act for you.</p>
         <div className="steps">
           <div className="step"><span className="n">1</span><div><b>Paste your API key</b><span className="muted">A Claude key (console.anthropic.com) works best; an OpenAI key (platform.openai.com) works too. It stays encrypted on this computer.</span></div></div>
           <div className="step"><span className="n">2</span><div><b>Click Allow for ROS</b><span className="muted">Your browser opens once so the ROS dashboard can connect. After that it stays connected.</span></div></div>
