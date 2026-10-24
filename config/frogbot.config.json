@@ -35,7 +35,7 @@
     {
       "id": "slack",
       "name": "Slack",
-      "description": "Read channels, collect requests, and post on your behalf (always asks first).",
+      "description": "Read channels, find what people asked for, and post on your behalf.",
       "icon": "💬",
       "transport": "http",
       "url": "https://mcp.slack.com/mcp",

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { Agent, Conversation } from '../../shared/types';
 import { selectConversation, setState, useStore } from '../store';
-import { Avatar, GroupAvatar, Icon, Logo } from './ui';
+import { AppIcon, Avatar, GroupAvatar, Icon, Logo } from './ui';
+import { stepText } from './Live';
 
 export function Sidebar() {
   const conversations = useStore((s) => s.conversations);
@@ -44,9 +45,9 @@ export function Sidebar() {
         <div style={{ position: 'relative' }}>
           <button className="icon-btn accent" data-testid="new-menu" title="New" onClick={() => setMenu((m) => !m)}><Icon.Plus /></button>
           {menu && (
-            <div className="card" style={{ position: 'absolute', right: 0, top: 38, zIndex: 20, minWidth: 190, padding: 6, gap: 2, animation: 'pop .3s var(--spring) both' }} onMouseLeave={() => setMenu(false)}>
-              <button className="btn ghost" style={{ textAlign: 'left', border: 0 }} data-testid="new-agent" onClick={() => { setMenu(false); setState({ sheet: 'new-agent' }); }}>🐸 New agent</button>
-              <button className="btn ghost" style={{ textAlign: 'left', border: 0 }} data-testid="new-group" onClick={() => { setMenu(false); setState({ sheet: 'new-group' }); }}>👥 New group</button>
+            <div className="card" style={{ position: 'absolute', right: 0, top: 38, zIndex: 20, minWidth: 190, padding: 6, gap: 2, animation: 'appear .15s var(--ease) both', boxShadow: 'var(--shadow)' }} onMouseLeave={() => setMenu(false)}>
+              <button className="btn ghost" style={{ textAlign: 'left', border: 0 }} data-testid="new-agent" onClick={() => { setMenu(false); setState({ sheet: 'new-agent' }); }}><span className="row" style={{ gap: 8 }}><Icon.Plus size={15} /> New agent</span></button>
+              <button className="btn ghost" style={{ textAlign: 'left', border: 0 }} data-testid="new-group" onClick={() => { setMenu(false); setState({ sheet: 'new-group' }); }}><span className="row" style={{ gap: 8 }}><Icon.Users size={15} /> New group</span></button>
             </div>
           )}
         </div>
@@ -73,6 +74,7 @@ export function Sidebar() {
                 conversation={c}
                 agents={c.memberIds.map((id) => agentById.get(id)).filter(Boolean) as Agent[]}
                 status={c.kind === 'direct' ? runtimes[c.memberIds[0]]?.status : undefined}
+                live={c.kind === 'direct' && runtimes[c.memberIds[0]]?.status === 'working' ? stepText(runtimes[c.memberIds[0]]!) : undefined}
                 active={view === 'chats' && c.id === selectedId}
                 delay={i * 25}
               />
@@ -93,7 +95,7 @@ export function Sidebar() {
             {enabled.slice(0, 4).map((i) => {
               const state = integrationStatus[i.id]?.state;
               const color = state === 'connected' ? 'var(--accent)' : state === 'connecting' ? 'var(--info)' : state === 'needs-auth' ? 'var(--warn)' : state === 'error' ? 'var(--danger)' : '#3a4540';
-              return <span key={i.id} title={`${i.name}: ${state}`}>{i.icon}<i style={{ background: color }} /></span>;
+              return <span key={i.id} title={`${i.name}: ${state}`}><AppIcon integration={i} size={18} /><i style={{ background: color }} /></span>;
             })}
           </span>
         </button>
@@ -107,8 +109,9 @@ export function Sidebar() {
   );
 }
 
-function ConversationItem({ conversation, agents, status, active, delay }: {
+function ConversationItem({ conversation, agents, status, live, active, delay }: {
   conversation: Conversation;
+  live?: string;
   agents: Agent[];
   status?: 'idle' | 'working' | 'waiting' | 'error';
   active: boolean;
@@ -123,11 +126,11 @@ function ConversationItem({ conversation, agents, status, active, delay }: {
       style={{ animationDelay: `${delay}ms` }}
       onClick={() => selectConversation(conversation.id)}
     >
-      {conversation.kind === 'group' ? <GroupAvatar members={agents} /> : <Avatar agent={agent} status={status ?? 'idle'} />}
+      {conversation.kind === 'group' ? <GroupAvatar members={agents} size={34} /> : <Avatar agent={agent} size={34} status={status ?? 'idle'} />}
       <span className="conv-text">
         <span className="conv-title">{conversation.title}</span>
         <span className="conv-preview" style={{ display: 'block' }}>
-          {status === 'working' ? 'Working…' : status === 'waiting' ? 'Waiting for you' : conversation.preview || (agent?.label ?? '')}
+          {status === 'working' ? live || 'Working…' : status === 'waiting' ? 'Waiting for you' : conversation.preview || (agent?.label ?? '')}
         </span>
       </span>
     </button>

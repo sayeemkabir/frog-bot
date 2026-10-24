@@ -4,6 +4,7 @@ import { api } from '../api';
 import { attempt, setState, toast, useStore } from '../store';
 import { Avatar, ConfirmButton, GroupAvatar, Icon, Toggle, clock, plural, timeAgo } from './ui';
 import { MODES } from './Live';
+import { AvatarEditor } from './AvatarEditor';
 
 type Tab = 'details' | 'library' | 'computer';
 
@@ -74,9 +75,15 @@ function DetailsTab({ agent }: { agent: Agent }) {
         <span>Name</span>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
+      <AvatarEditor
+        name={agent.name}
+        allowLogo
+        value={{ avatarStyle: agent.avatarStyle ?? 'initials', emoji: agent.emoji, color: agent.color, avatarImage: agent.avatarImage }}
+        onChange={(v) => attempt(() => api.updateAgent(agent.id, v))}
+      />
       <label className="field">
         <span>What should {agent.name} do?</span>
-        <textarea className="textarea" rows={6} value={instructions} placeholder="Describe the job in plain words. For example: you are our Reddit strategist. Check the ROS dashboard every morning…" onChange={(e) => setInstructions(e.target.value)} />
+        <textarea className="textarea" rows={6} value={instructions} placeholder="Describe the job in plain words. For example: you are our researcher. Every morning, check the news on our industry and post a short summary…" onChange={(e) => setInstructions(e.target.value)} />
       </label>
       {dirty && <button className="btn primary" onClick={save}>Save changes</button>}
 
@@ -254,7 +261,7 @@ function ComputerTab({ agent }: { agent: Agent }) {
         {activity.length === 0 && <div className="muted">Nothing yet. Steps show up here live while {agent.name} works.</div>}
         {activity.map((item) => (
           <div key={item.id} className="activity-item">
-            <span>{item.kind === 'tool' ? '🔧' : item.kind === 'result' ? '✓' : '•'}</span>
+            <span>{item.kind === 'tool' ? <Icon.Tool /> : item.kind === 'result' ? <Icon.Check size={13} /> : <Icon.Dot />}</span>
             <div>
               {item.detail ? (
                 <details>

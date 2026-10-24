@@ -30,7 +30,51 @@ export const Icon = {
   Copy: ({ size = 14 }: IconProps) => svg(size, <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></>),
   Pause: ({ size = 14 }: IconProps) => svg(size, <path d="M9 5v14M15 5v14" />),
   Down: ({ size = 14 }: IconProps) => svg(size, <path d="M12 5v14M6 13l6 6 6-6" />),
+  Bolt: ({ size = 14 }: IconProps) => svg(size, <path d="M13 3 5 14h6l-1 7 8-11h-6z" />),
+  Hand: ({ size = 14 }: IconProps) => svg(size, <path d="M8 13V6a1.5 1.5 0 0 1 3 0v5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v8a7 7 0 0 1-7 7h-.5a6 6 0 0 1-4.6-2.2L3 15.5a1.6 1.6 0 0 1 2.4-2.1L8 16" />),
+  Plan: ({ size = 14 }: IconProps) => svg(size, <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3" /></>),
+  Check: ({ size = 14 }: IconProps) => svg(size, <path d="m5 12.5 4.5 4.5L19 7" />),
+  Alert: ({ size = 15 }: IconProps) => svg(size, <><path d="M12 4 2.8 19.5a1 1 0 0 0 .9 1.5h16.6a1 1 0 0 0 .9-1.5z" /><path d="M12 10v4M12 17.5v.01" /></>),
+  Tool: ({ size = 13 }: IconProps) => svg(size, <path d="M14.5 6.5a4 4 0 0 0-5.4 5.1L4 16.7 7.3 20l5.1-5.1a4 4 0 0 0 5.1-5.4l-2.4 2.4-2.6-.7-.7-2.6z" />),
+  Dot: ({ size = 13 }: IconProps) => svg(size, <circle cx="12" cy="12" r="2.5" fill="currentColor" />),
+  Globe: ({ size = 16 }: IconProps) => svg(size, <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>),
+  LogOut: ({ size = 15 }: IconProps) => svg(size, <><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="M10 16l-4-4 4-4M6 12h10" /></>),
+  Image: ({ size = 15 }: IconProps) => svg(size, <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="m21 16-5-5-9 9" /></>),
+  ArrowRight: ({ size = 12 }: IconProps) => svg(size, <path d="M5 12h14M13 6l6 6-6 6" />),
 };
+
+const APP_MARKS: Record<string, { label: string; color: string }> = {
+  slack: { label: 'S', color: '#611f69' },
+  notion: { label: 'N', color: '#2f3033' },
+  github: { label: 'GH', color: '#24292f' },
+  linear: { label: 'L', color: '#5e6ad2' },
+};
+
+/** A connected app's icon: a line icon for the browser and custom apps, a lettered mark for known services. */
+export function AppIcon({ integration, size = 34 }: { integration: { id: string; name: string; transport?: string }; size?: number }) {
+  const key = Object.keys(APP_MARKS).find((k) => integration.id.startsWith(k) || integration.name.toLowerCase().startsWith(k));
+  const mark = key ? APP_MARKS[key] : undefined;
+  const glyph = integration.transport === 'builtin-browser' || integration.id === 'browser'
+    ? <Icon.Globe size={size * 0.5} />
+    : mark ? mark.label : <Icon.Plug size={size * 0.5} />;
+  return (
+    <span className="int-icon" style={{ width: size, height: size, fontSize: size * 0.4, ...(mark ? { background: mark.color, borderColor: 'transparent' } : {}) }}>
+      {glyph}
+    </span>
+  );
+}
+
+/** Up to two initials from a name: "Docs Guy" → "DG", "frog" → "F". */
+export function initials(name: string) {
+  const words = name.trim().split(/[\s_-]+/).filter(Boolean);
+  if (!words.length) return '?';
+  return (words.length === 1 ? words[0].slice(0, 1) : words[0][0] + words[1][0]).toUpperCase();
+}
+
+/** A calm, darkened version of an agent's colour, so white initials stay readable. */
+export function avatarFill(color?: string) {
+  return `color-mix(in srgb, ${color || '#5b6470'} 72%, #101114)`;
+}
 
 /** The Frog Bot mark: an original frog face. */
 export function Logo({ className = 'brand-logo' }: { className?: string }) {
@@ -56,11 +100,27 @@ export function Logo({ className = 'brand-logo' }: { className?: string }) {
   );
 }
 
-export function Avatar({ agent, size = 36, status }: { agent?: Pick<Agent, 'emoji' | 'color'>; size?: number; status?: AgentStatus }) {
-  const color = agent?.color ?? '#3a4540';
+type AvatarAgent = Partial<Pick<Agent, 'name' | 'emoji' | 'color' | 'avatarStyle' | 'avatarImage'>>;
+
+/** An agent's (or person's) picture: initials on its colour by default, or the emoji, image or Frog Bot mark they chose. */
+export function Avatar({ agent, size = 36, status }: { agent?: AvatarAgent; size?: number; status?: AgentStatus }) {
+  const style = agent?.avatarStyle ?? 'initials';
+  let content: ReactNode;
+  let background = avatarFill(agent?.color);
+  if (style === 'image' && agent?.avatarImage) {
+    content = <img src={agent.avatarImage} alt="" />;
+  } else if (style === 'logo') {
+    content = <Logo className="logo-mark" />;
+    background = '#16261d';
+  } else if (style === 'emoji' && agent?.emoji) {
+    content = <span style={{ fontSize: size * 0.52 }}>{agent.emoji}</span>;
+    background = `color-mix(in srgb, ${agent.color || '#5b6470'} 22%, #16181b)`;
+  } else {
+    content = <span style={{ fontSize: Math.max(10, size * 0.38) }}>{initials(agent?.name ?? '?')}</span>;
+  }
   return (
-    <div className="avatar" style={{ width: size, height: size, fontSize: size * 0.5, background: `linear-gradient(145deg, ${color}40, ${color}18)`, border: `1px solid ${color}55` }}>
-      <span>{agent?.emoji ?? '🤖'}</span>
+    <div className="avatar" style={{ width: size, height: size, background }}>
+      {content}
       {status && <i className={`dot ${status}`} />}
     </div>
   );
@@ -70,20 +130,22 @@ export function plural(n: number, word: string) {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
+/** A group's picture: a small grid of its members' initials. */
 export function GroupAvatar({ members, size = 36 }: { members: Agent[]; size?: number }) {
   if (members.length <= 1) {
     return (
-      <div className="avatar group-avatar single" style={{ width: size, height: size, fontSize: size * 0.45 }}>
-        <span>{members[0]?.emoji ?? '👥'}</span>
+      <div className="avatar group-avatar single" style={{ width: size, height: size, background: avatarFill(members[0]?.color) }}>
+        <span style={{ fontSize: size * 0.36 }}>{members[0] ? initials(members[0].name) : <Icon.Users size={size * 0.5} />}</span>
       </div>
     );
   }
-  const shown = members.slice(0, 4);
+  // Two members' pictures overlapping, like a team chat's group icon.
+  const inner = Math.round(size * 0.68);
   return (
-    <div className="avatar group-avatar" style={{ width: size, height: size }}>
-      {shown.map((m) => (
-        <span key={m.id} style={{ background: `${m.color}33` }}>{m.emoji}</span>
-      ))}
+    <div className="group-stack" style={{ width: size, height: size }}>
+      <span style={{ left: 0, top: 0 }}><Avatar agent={members[0]} size={inner} /></span>
+      <span style={{ right: 0, bottom: 0 }}><Avatar agent={members[1]} size={inner} /></span>
+      {members.length > 2 && <i className="group-count">+{members.length - 2}</i>}
     </div>
   );
 }

@@ -19,6 +19,10 @@ export interface Agent {
   instructions: string;
   emoji: string;
   color: string;
+  /** How the avatar looks: initials on the colour (default), the emoji, an uploaded image, or the Frog Bot mark. */
+  avatarStyle?: 'initials' | 'emoji' | 'image' | 'logo';
+  /** Uploaded avatar image as a small data URL (avatarStyle 'image'). */
+  avatarImage?: string;
   model: string;
   /** Integration ids this agent may use. */
   integrations: ID[];
@@ -279,6 +283,8 @@ export interface NewAgentInput {
   instructions?: string;
   emoji?: string;
   color?: string;
+  avatarStyle?: Agent['avatarStyle'];
+  avatarImage?: string;
   model?: string;
   integrations?: ID[];
   autonomy?: Mode;

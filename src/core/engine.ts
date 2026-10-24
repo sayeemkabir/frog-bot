@@ -112,7 +112,7 @@ const MAX_GROUP_DEPTH = 12;
 const ACKNOWLEDGEMENT = /^(thanks|thank you|thx|ty|got it|received|noted|great|perfect|awesome|ok(ay)?|sounds good|will do|understood|cheers|appreciate it|much appreciated)\b[^?]{0,100}$/i;
 const ACTIVITY_LIMIT = 150;
 const NO_REPLY = /^\(?\s*no reply\s*\)?\.?$/i;
-const AGENT_COLORS = ['#3ddc84', '#ff5a5f', '#ffb74d', '#4fc3f7', '#ba68c8', '#f06292', '#aed581', '#90a4ae'];
+const AGENT_COLORS = ['#3f9d6e', '#5b7fc9', '#8a6fc4', '#c48a4f', '#c45f6f', '#4a9aa5', '#8f9a4a', '#6b7280'];
 const AGENT_EMOJIS = ['🐸', '🦊', '🐙', '🦉', '🐝', '🐳', '🦁', '🐼'];
 
 export class FrogEngine {
@@ -218,6 +218,9 @@ export class FrogEngine {
     // Upgrade Frog to the chief-of-staff role unless the user wrote their own instructions.
     const frog = this.agentsDoc.value.find((a) => a.name === 'Frog' && a.instructions === OLD_FROG_INSTRUCTIONS);
     if (frog) this.updateAgent(frog.id, { instructions: FROG_INSTRUCTIONS, label: 'Chief of staff: plans the work and runs the team' });
+    // Frog wears the Frog Bot mark unless the user picked something else.
+    const plainFrog = this.agentsDoc.value.find((a) => a.name === 'Frog' && !a.avatarStyle);
+    if (plainFrog) this.updateAgent(plainFrog.id, { avatarStyle: 'logo' });
     this.timers.push(setInterval(() => this.runDueTasks(), 30_000));
     this.applyWatchMode();
     this.refreshOpenAiModels().catch((err) => this.log.warn('openai', 'Model list failed', String(err)));
@@ -264,6 +267,7 @@ export class FrogEngine {
       name: 'Frog',
       label: 'Chief of staff: plans the work and runs the team',
       instructions: FROG_INSTRUCTIONS,
+      avatarStyle: 'logo',
       emoji: '🐸',
       color: '#3ddc84',
     });
@@ -1157,6 +1161,8 @@ export class FrogEngine {
       instructions: input.instructions?.trim() ?? '',
       emoji: input.emoji || AGENT_EMOJIS[index % AGENT_EMOJIS.length],
       color: input.color || AGENT_COLORS[index % AGENT_COLORS.length],
+      ...(input.avatarStyle ? { avatarStyle: input.avatarStyle } : {}),
+      ...(input.avatarImage ? { avatarImage: input.avatarImage.slice(0, 400_000) } : {}),
       model: input.model || this.settingsDoc.value.defaultModel,
       integrations: input.integrations ?? this.integrations.list().filter((i) => i.enabled).map((i) => i.id),
       autonomy: input.autonomy ?? 'ask',
@@ -1199,6 +1205,7 @@ export class FrogEngine {
     const agent = this.agent(agentId);
     if (!agent) throw new Error('Agent not found');
     const { id: _id, folder: _folder, createdAt: _createdAt, ...allowed } = patch;
+    if (allowed.avatarImage && allowed.avatarImage.length > 400_000) throw new Error('That picture is too large. Choose a smaller one.');
     if (allowed.name !== undefined) {
       const name = allowed.name.trim();
       if (!name) throw new Error('Name cannot be empty');

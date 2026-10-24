@@ -1,14 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { Agent, AgentRuntime, Conversation, GroupMode, Mode } from '../../shared/types';
 import { api } from '../api';
 import { attempt, selectConversation, useStore } from '../store';
-import { Avatar } from './ui';
+import { Avatar, Icon } from './ui';
 
-export const MODES: Record<GroupMode, { icon: string; label: string; hint: string }> = {
-  ask: { icon: '✋', label: 'Ask first', hint: 'asks before changing things' },
-  auto: { icon: '⚡', label: 'Auto', hint: 'works on its own, asks only before sending or deleting' },
-  plan: { icon: '📝', label: 'Plan', hint: 'looks around and plans, changes nothing' },
-  each: { icon: '👥', label: "Each agent's own mode", hint: 'every agent uses the mode set in its own chat' },
+export const MODES: Record<GroupMode, { icon: ReactNode; label: string; hint: string }> = {
+  ask: { icon: <Icon.Hand />, label: 'Ask first', hint: 'asks before changing things' },
+  auto: { icon: <Icon.Bolt />, label: 'Auto', hint: 'works on its own; only stops for things that wipe data' },
+  plan: { icon: <Icon.Plan />, label: 'Plan', hint: 'looks around and plans, changes nothing' },
+  each: { icon: <Icon.Users size={14} />, label: "Each agent's own mode", hint: 'every agent uses the mode set in its own chat' },
 };
 
 const DIRECT_ORDER: Mode[] = ['ask', 'auto', 'plan'];
@@ -42,12 +42,12 @@ export function ModeBar({ conversation }: { conversation: Conversation }) {
         <b>{info.label}</b>
         <span className="mode-hint">· {info.hint}</span>
       </button>
-      <span className="mode-keys">shift+tab to switch</span>
+      <span className="mode-keys"><kbd>Shift</kbd> + <kbd>Tab</kbd> to switch</span>
     </div>
   );
 }
 
-function stepText(runtime: AgentRuntime) {
+export function stepText(runtime: AgentRuntime) {
   const last = [...runtime.activity].reverse().find((a) => a.kind === 'tool');
   if (!last || Date.now() - last.at > 60_000) return 'Thinking…';
   return last.title.length > 90 ? `${last.title.slice(0, 90)}…` : last.title;
@@ -70,17 +70,17 @@ export function WorkingBubbles({ conversation }: { conversation: Conversation })
     <div className="working-wrap" data-testid="working">
       {active.length >= 2 && (
         <div className="teamwork">
-          <div className="teamwork-avatar"><Avatar agent={active[0].agent} size={34} /></div>
+          <div className="teamwork-avatar"><Avatar agent={active[0].agent} size={20} /></div>
           <div className="beam">
             <i /><i /><i />
           </div>
-          <div className="teamwork-avatar"><Avatar agent={active[1].agent} size={34} /></div>
+          <div className="teamwork-avatar"><Avatar agent={active[1].agent} size={20} /></div>
           <span className="teamwork-label">{active[0].agent.name} and {active[1].agent.name} are working together</span>
         </div>
       )}
       {active.map(({ agent, runtime }) => (
         <div key={agent.id} className="working-bubble" style={{ ['--glow' as string]: agent.color }}>
-          <div className="bloom"><Avatar agent={agent} size={30} /></div>
+          <div className="bloom"><Avatar agent={agent} size={24} /></div>
           <div className="working-text">
             <b>{agent.name}</b>
             <span>{stepText(runtime!)}</span>
@@ -108,7 +108,7 @@ export function NeedsYouBar() {
         const where = conversations.find((c) => c.id === w.conversationId);
         return (
           <div key={runtime.agentId} className="needs-card">
-            <div className="bloom amber"><Avatar agent={agent} size={30} /></div>
+            <div className="bloom amber"><Avatar agent={agent} size={28} /></div>
             <div className="needs-text">
               <b>{agent?.name ?? 'An agent'} needs you</b>
               <span>{w.kind === 'approval' ? `Wants to: ${w.text}` : w.kind === 'question' ? w.text : w.text}</span>

@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { api } from '../api';
 import { attempt, selectConversation, setState, toast, useStore } from '../store';
 import { Avatar, Sheet } from './ui';
-
-const EMOJIS = ['🐸', '🦊', '🐙', '🦉', '🐝', '🐳', '🦁', '🐼', '🤖', '📝', '📈', '🔎'];
-const COLORS = ['#3ddc84', '#ff5a5f', '#ffb74d', '#4fc3f7', '#ba68c8', '#f06292', '#aed581', '#90a4ae'];
+import { AVATAR_COLORS, AVATAR_EMOJIS, AvatarEditor, type AvatarValue } from './AvatarEditor';
 
 const ROLE_IDEAS = [
   { name: 'Researcher', label: 'Finds and checks information', instructions: 'Research topics thoroughly on the web and in our files. Cite sources. Save findings to the shared folder.' },
   { name: 'Writer', label: 'Drafts posts, emails and docs', instructions: 'Write clear drafts in the house voice. Save drafts to the shared folder and ask before anything is published or sent.' },
-  { name: 'Transcriber', label: 'Turns videos and audio into text', instructions: 'Get transcripts fast: use youtube_transcript for YouTube links first, and only open the browser if that fails. Save transcripts to the shared folder.' },
+  { name: 'Transcriber', label: 'Turns videos and audio into text', instructions: 'Get transcripts fast: try the video page captions or a transcript site with web_search and fetch_url first, and only drive the browser if that fails. Save transcripts to the shared folder.' },
 ];
 
 export function AgentDialog() {
@@ -17,14 +15,17 @@ export function AgentDialog() {
   const [name, setName] = useState('');
   const [label, setLabel] = useState('');
   const [instructions, setInstructions] = useState('');
-  const [emoji, setEmoji] = useState(EMOJIS[(agentCount + 1) % EMOJIS.length]);
-  const [color, setColor] = useState(COLORS[(agentCount + 1) % COLORS.length]);
+  const [avatar, setAvatar] = useState<AvatarValue>({
+    avatarStyle: 'initials',
+    emoji: AVATAR_EMOJIS[(agentCount + 1) % AVATAR_EMOJIS.length],
+    color: AVATAR_COLORS[(agentCount + 1) % AVATAR_COLORS.length],
+  });
   const [saving, setSaving] = useState(false);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const result = await attempt(() => api.createAgent({ name, label, instructions, emoji, color }), 'Could not create the agent');
+    const result = await attempt(() => api.createAgent({ name, label, instructions, ...avatar }), 'Could not create the agent');
     setSaving(false);
     if (result) {
       setState({ sheet: null });
@@ -36,19 +37,11 @@ export function AgentDialog() {
   return (
     <Sheet testId="agent-dialog" title="New agent" subtitle="An agent is a teammate with its own job, memory and computer." onClose={() => setState({ sheet: null })} small>
       <form className="list" style={{ gap: 14 }} onSubmit={save}>
-        <div className="row" style={{ gap: 14 }}>
-          <Avatar agent={{ emoji, color }} size={56} />
-          <label className="field" style={{ flex: 1 }}>
-            <span>Name</span>
-            <input className="input" data-testid="agent-name" autoFocus placeholder="e.g. Docs Guy" value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-        </div>
-        <div className="emoji-row">
-          {EMOJIS.map((e) => <button type="button" key={e} className={e === emoji ? 'on' : ''} onClick={() => setEmoji(e)}>{e}</button>)}
-        </div>
-        <div className="color-row">
-          {COLORS.map((c) => <button type="button" key={c} className={c === color ? 'on' : ''} style={{ background: c }} onClick={() => setColor(c)} aria-label={c} />)}
-        </div>
+        <label className="field">
+          <span>Name</span>
+          <input className="input" data-testid="agent-name" autoFocus placeholder="e.g. Docs Guy" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <AvatarEditor name={name || 'New agent'} value={avatar} onChange={setAvatar} />
         <label className="field">
           <span>Role (one line)</span>
           <input className="input" data-testid="agent-label" placeholder="e.g. Writes and reviews drafts" value={label} onChange={(e) => setLabel(e.target.value)} />

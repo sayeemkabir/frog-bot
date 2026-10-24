@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import '@fontsource-variable/inter';
 import './styles.css';
 
 /** If a screen crashes, show what happened instead of a blank window. */

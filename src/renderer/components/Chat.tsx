@@ -70,7 +70,7 @@ export function Chat() {
           </button>
         )}
         <button className={`pill-btn ${panelOpen ? 'on' : ''}`} data-testid="toggle-panel" onClick={() => setState((s) => ({ panelOpen: !s.panelOpen }))}>
-          {direct ? <>{direct.emoji} About {direct.name}</> : <><Icon.Users /> Members</>}
+          {direct ? <>Details</> : <><Icon.Users /> Members</>}
         </button>
       </div>
       <NeedsYouBar />
@@ -151,7 +151,7 @@ function MessageList({ conversation, messages, agentById }: { conversation: Conv
                 await attempt(() => api.sendMessage(conversation.id, 'Looks good. Go ahead with the plan.'));
               }}
             >
-              ⚡ Run this plan
+              <Icon.Bolt /> Run this plan
             </button>
             <span className="muted">Switches to {conversation.kind === 'group' ? "each agent's own mode" : 'Auto'} and starts.</span>
           </div>
@@ -169,7 +169,7 @@ function MessageView({ message, agent, agentById }: { message: Message; agent?: 
     return (
       <div className="msg" data-testid="message">
         <div className="relay" title={message.text} onClick={(e) => e.currentTarget.classList.toggle('open')}>
-          <span className="relay-fly">{from?.emoji}</span><b>{from?.name ?? 'Agent'}</b> messaged <span>{to?.emoji}</span><b>{to?.name ?? 'Agent'}</b>
+          <Avatar agent={from} size={18} /><b>{from?.name ?? 'Agent'}</b><span className="arrow"><Icon.ArrowRight /></span><Avatar agent={to} size={18} /><b>{to?.name ?? 'Agent'}</b>
           <span className="relay-text">{message.text}</span>
         </div>
       </div>
@@ -179,7 +179,7 @@ function MessageView({ message, agent, agentById }: { message: Message; agent?: 
   if (message.kind === 'error') {
     return (
       <div className="msg" data-testid="message">
-        <div className="card error"><div className="card-title">⚠️ {message.text}</div></div>
+        <div className="card error"><div className="card-title"><Icon.Alert />{message.text}</div></div>
       </div>
     );
   }
@@ -187,7 +187,7 @@ function MessageView({ message, agent, agentById }: { message: Message; agent?: 
   const isUser = message.author.kind === 'user';
   return (
     <div className={`msg ${isUser ? 'user' : 'agent'}`} data-testid="message">
-      {!isUser && <Avatar agent={agent} size={30} />}
+      {!isUser && <Avatar agent={agent} size={32} />}
       <div className="msg-body">
         {!isUser && (
           <div className="msg-author">{agent?.name ?? 'Frog Bot'} <time>{clock(message.createdAt)}</time></div>
@@ -214,7 +214,7 @@ function QuestionCard({ message }: { message: Message }) {
     return (
       <div className="card">
         <div className="card-title">{q.question}</div>
-        <div className="answered"><span className="key">✓</span>{q.answer}</div>
+        <div className="answered"><span className="key"><Icon.Check /></span>{q.answer}</div>
       </div>
     );
   }
@@ -269,7 +269,7 @@ function AgentRequestCard({ message }: { message: Message }) {
   const r = message.agentRequest!;
   return (
     <div className="card" data-testid="agent-request-card">
-      <div className="card-title">👋 Can we add a new teammate?</div>
+      <div className="card-title"><Icon.Users /> Can we add a new teammate?</div>
       <div><b>{r.name}</b>{r.label ? `: ${r.label}` : ''}</div>
       <div className="card-sub">{r.reason}</div>
       {r.decision ? (
@@ -343,7 +343,7 @@ function Composer({ conversation, members }: { conversation: Conversation; membe
         <div className="mention-bar">
           {members.map((m) => (
             <button key={m.id} className="mention-chip" onClick={() => { setText((t) => `${t}${t && !t.endsWith(' ') ? ' ' : ''}@${m.name} `); ref.current?.focus(); }}>
-              {m.emoji} @{m.name}
+              <Avatar agent={m} size={16} /> {m.name}
             </button>
           ))}
         </div>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Integration, IntegrationStatus, IntegrationTemplate } from '../../shared/types';
 import { api } from '../api';
 import { attempt, setState, toast, useStore } from '../store';
-import { ConfirmButton, Icon, Sheet, Toggle } from './ui';
+import { ConfirmButton, Icon, Sheet, Toggle, AppIcon } from './ui';
 
 const STATE_LABEL: Record<IntegrationStatus['state'], { text: string; cls: string }> = {
   connected: { text: 'Connected', cls: 'ok' },
@@ -23,7 +23,7 @@ export function IntegrationsSheet() {
     <Sheet
       testId="integrations-sheet"
       title={adding ? <span className="row"><button className="icon-btn" onClick={() => setAdding(null)}><Icon.Back /></button>{adding.icon} Add {adding.name}</span> : 'Integrations'}
-      subtitle={adding ? adding.description : 'The apps your agents can use. Agents always ask you before they post or send anything.'}
+      subtitle={adding ? adding.description : 'The apps your agents can use. In Ask first mode, agents check with you before they post or send anything.'}
       onClose={close}
     >
       {adding ? (
@@ -39,7 +39,7 @@ export function IntegrationsSheet() {
           <div className="grid-cards">
             {templates.map((t) => (
               <button key={t.id} className="template-btn" data-testid={`template-${t.id}`} onClick={() => setAdding(t)}>
-                <span className="int-icon">{t.icon}</span>
+                <AppIcon integration={{ id: t.id, name: t.name, transport: t.transport }} />
                 <span>
                   <b style={{ display: 'block' }}>{t.name}</b>
                   <span className="muted">{t.description}</span>
@@ -69,7 +69,7 @@ function IntegrationCard({ integration, status, delay }: { integration: Integrat
   return (
     <div className="int-card" data-integration-id={integration.id} style={{ animationDelay: `${delay}ms` }}>
       <div className="head">
-        <span className="int-icon">{integration.icon}</span>
+        <AppIcon integration={integration} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="name">{integration.name}</div>
           <span className={`chip ${label.cls}`}>{label.text}{status?.toolCount ? ` · ${status.toolCount} tools` : ''}</span>

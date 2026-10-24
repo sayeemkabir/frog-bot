@@ -167,6 +167,60 @@ export function isReadOnlyCall(toolName: string, rawInput: unknown): boolean {
   return toolIntent(mcp.tool) === 'read';
 }
 
+function hostOf(url: unknown) {
+  try {
+    return new URL(String(url)).host.replace(/^www\./, '');
+  } catch {
+    return String(url ?? 'a web page').slice(0, 60);
+  }
+}
+
+const quote = (v: unknown, max = 50) => {
+  const s = String(v ?? '').trim();
+  return s ? `“${s.length > max ? `${s.slice(0, max)}…` : s}”` : '';
+};
+
+/** Browser steps in plain words, e.g. "Opening youtube.com", "Clicking “Sign in”". */
+function describeBrowserStep(tool: string, input: Record<string, unknown>) {
+  const t = tool.replace(/^browser_/, '');
+  const target = quote(input.element ?? input.text ?? input.ref);
+  switch (t) {
+    case 'navigate': return `Opening ${hostOf(input.url)} in the browser`;
+    case 'navigate_back': return 'Going back a page';
+    case 'snapshot': return 'Reading the page';
+    case 'find': return `Looking for ${quote(input.text ?? input.regex) || 'something'} on the page`;
+    case 'take_screenshot': return 'Taking a screenshot';
+    case 'click': return `Clicking ${target || 'on the page'}`;
+    case 'type': return `Typing into ${target || 'a field'}`;
+    case 'fill_form': return 'Filling in a form';
+    case 'press_key': return `Pressing ${String(input.key ?? 'a key')}`;
+    case 'select_option': return `Choosing an option in ${target || 'a list'}`;
+    case 'hover': return `Pointing at ${target || 'something'}`;
+    case 'wait_for': return 'Waiting for the page';
+    case 'tabs': return 'Switching browser tabs';
+    case 'evaluate': return 'Running a script on the page';
+    case 'file_upload': return 'Uploading a file';
+    case 'network_requests': return 'Checking what the page loaded';
+    case 'close': return 'Closing the browser';
+    default: return `Browser: ${t.replace(/_/g, ' ')}`;
+  }
+}
+
+/** Team steps in plain words, e.g. "Handing work to Scout". */
+function describeTeamStep(tool: string, input: Record<string, unknown>) {
+  switch (tool) {
+    case 'message_agent': return `Messaging ${String(input.to ?? 'a teammate')}`;
+    case 'create_group': return `Starting the group ${quote(input.name)}`;
+    case 'ask_user': return 'Asking you a question';
+    case 'request_new_agent': return `Proposing a new teammate: ${String(input.name ?? '')}`;
+    case 'list_team': return 'Checking who is on the team';
+    case 'remember': return 'Saving a note to memory';
+    case 'schedule_task': return 'Scheduling a repeating task';
+    case 'notify_user': return 'Sending you a notification';
+    default: return tool.replace(/_/g, ' ');
+  }
+}
+
 export function describeToolCall(toolName: string, rawInput: unknown): string {
   const input = asObject(rawInput);
   const mcp = splitMcpName(toolName);
@@ -175,8 +229,10 @@ export function describeToolCall(toolName: string, rawInput: unknown): string {
   if (FILE_WRITE_TOOLS.has(toolName) && file) return `${toolName === 'Write' ? 'Write' : 'Edit'} file: ${file}`;
   if (toolName === 'Read' && file) return `Read file: ${file}`;
   if ((toolName === 'Glob' || toolName === 'Grep') && file) return `Look through: ${file}`;
-  if (toolName === 'WebSearch') return `Search the web: ${String(input.query ?? '')}`;
-  if (toolName === 'WebFetch') return `Open web page: ${String(input.url ?? '')}`;
+  if (toolName === 'WebSearch') return `Searching the web: ${String(input.query ?? '')}`;
+  if (toolName === 'WebFetch') return `Reading ${hostOf(input.url)}`;
+  if (mcp?.server === 'browser') return describeBrowserStep(mcp.tool, input);
+  if (mcp?.server === 'frog') return describeTeamStep(mcp.tool, input);
   if (mcp) {
     const args = Object.entries(input)
       .slice(0, 4)
