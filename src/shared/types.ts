@@ -366,3 +366,32 @@ export const FROG_API_METHODS: FrogApiMethod[] = [
   'clearLogs',
   'openLogsFolder',
 ];
+
+/** The signed-in person's name and picture (kept on this computer with their account). */
+export interface AccountProfile {
+  name: string;
+  avatarStyle: 'initials' | 'emoji' | 'image';
+  emoji: string;
+  color: string;
+  avatarImage?: string;
+}
+
+/** What the window shows: who is signed in, or the sign-in screen. */
+export interface AuthStatus {
+  /** False when no sign-in service is set up (the app then runs without accounts). */
+  required: boolean;
+  user: { id: string; email: string; name: string; profile: AccountProfile } | null;
+  /** Signed in from the saved session while the sign-in service could not be reached. */
+  offline?: boolean;
+}
+
+/** Accounts live outside the engine: there is no team until someone signs in. */
+export interface AuthApi {
+  status(): Promise<AuthStatus>;
+  signUp(email: string, password: string, name: string): Promise<AuthStatus>;
+  signIn(email: string, password: string): Promise<AuthStatus>;
+  signOut(): Promise<void>;
+  updateProfile(patch: Partial<AccountProfile>): Promise<AuthStatus>;
+}
+
+export const AUTH_API_METHODS: (keyof AuthApi)[] = ['status', 'signUp', 'signIn', 'signOut', 'updateProfile'];

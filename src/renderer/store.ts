@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type {
   Agent,
+  AuthStatus,
   AgentRuntime,
   Conversation,
   EngineEvent,
@@ -16,7 +17,7 @@ import type {
 import { api, transport } from './api';
 
 export type View = 'chats' | 'logs';
-export type Sheet = null | 'integrations' | 'settings' | 'new-agent' | 'new-group';
+export type Sheet = null | 'integrations' | 'settings' | 'new-agent' | 'new-group' | 'profile';
 
 export interface Toast {
   id: number;
@@ -28,6 +29,8 @@ export interface Toast {
 
 export interface State {
   ready: boolean;
+  /** Who is signed in (null until the app has checked). */
+  auth: AuthStatus | null;
   settings: Settings | null;
   agents: Agent[];
   conversations: Conversation[];
@@ -48,6 +51,7 @@ export interface State {
 
 let state: State = {
   ready: false,
+  auth: null,
   settings: null,
   agents: [],
   conversations: [],

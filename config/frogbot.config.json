@@ -206,5 +206,9 @@
         }
       ]
     }
-  ]
+  ],
+  "accounts": {
+    "supabaseUrl": "",
+    "supabaseAnonKey": ""
+  }
 }

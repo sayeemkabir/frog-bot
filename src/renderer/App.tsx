@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
-import { transport } from './api';
+import { authApi, transport } from './api';
+import { AuthScreen } from './components/AuthScreen';
+import { ProfileSheet } from './components/Profile';
 import { boot, selectConversation, setState, useStore } from './store';
 import { Chat } from './components/Chat';
 import { AgentDialog, GroupDialog } from './components/Dialogs';
@@ -20,9 +22,29 @@ export function App() {
   const panelOpen = useStore((s) => s.panelOpen);
   const hasSelection = useStore((s) => Boolean(s.selectedId));
 
+  const auth = useStore((s) => s.auth);
+  const start = () => boot().catch((err) => setState({ ready: true, toasts: [{ id: 0, title: 'Could not start', body: String(err), tone: 'error' }] }));
+
   useEffect(() => {
-    boot().catch((err) => setState({ ready: true, toasts: [{ id: 0, title: 'Could not start', body: String(err), tone: 'error' }] }));
+    authApi
+      .status()
+      .then((status) => {
+        setState({ auth: status });
+        if (!status.required || status.user) start();
+      })
+      .catch(() => start());
   }, []);
+
+  if (auth?.required && !auth.user) {
+    return (
+      <AuthScreen
+        onSignedIn={(status) => {
+          setState({ auth: status });
+          start();
+        }}
+      />
+    );
+  }
 
   if (!ready) {
     return (
@@ -47,6 +69,7 @@ export function App() {
       {sheet === 'settings' && <SettingsSheet />}
       {sheet === 'new-agent' && <AgentDialog />}
       {sheet === 'new-group' && <GroupDialog />}
+      {sheet === 'profile' && <ProfileSheet />}
       <Toasts />
     </>
   );

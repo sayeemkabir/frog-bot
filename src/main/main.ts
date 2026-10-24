@@ -18,9 +18,10 @@ import {
 } from 'electron';
 import config from '../../config/frogbot.config.json';
 import { FrogEngine, defaultPlatformName, type AppConfig, type EngineHost } from '../core/engine';
+import { AccountManager, SupabaseAuth } from '../core/auth';
 import { FrogPaths } from '../core/paths';
 import { FileSecretBox } from '../core/secrets';
-import { FROG_API_METHODS, type FrogApi } from '../shared/types';
+import { AUTH_API_METHODS, FROG_API_METHODS, type AuthApi, type FrogApi } from '../shared/types';
 import { apiKeyFromEnv, loadDotEnv, openAiKeyFromEnv } from './env';
 import { runSmoke } from './smoke';
 import { DemoRunner } from './demoRunner';
@@ -51,7 +52,8 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
 let trayHintShown = false;
-let engine: FrogEngine;
+let engine: FrogEngine | null = null;
+let accounts: AccountManager;
 
 function iconPath(name: string) {
   const candidates = [path.join(appRoot, 'build', name), path.join(process.resourcesPath ?? '', name)];
@@ -117,11 +119,26 @@ const host: EngineHost = {
   },
 };
 
-function createEngine() {
-  const paths = new FrogPaths(smokeDir ? path.join(smokeDir, 'FrogsWorld') : undefined);
+// The self-test uses a throwaway folder; skip the keychain so it can never prompt.
+const encryptionAvailable = () => !smokeDir && safeStorage.isEncryptionAvailable();
+
+/** Accounts are on when the app ships with a sign-in service (never in the self-test). */
+function createAccounts() {
+  const base = new FrogPaths(smokeDir ? path.join(smokeDir, 'FrogsWorld') : undefined).root;
+  const settings = (config as { accounts?: { supabaseUrl?: string; supabaseAnonKey?: string } }).accounts ?? {};
+  const supabaseUrl = process.env.FROG_SUPABASE_URL || settings.supabaseUrl || '';
+  const supabaseAnonKey = process.env.FROG_SUPABASE_ANON_KEY || settings.supabaseAnonKey || '';
+  const backend = !smokeDir && supabaseUrl && supabaseAnonKey ? new SupabaseAuth({ supabaseUrl, supabaseAnonKey }) : null;
+  return new AccountManager(base, backend, {
+    seal: (plain) => (encryptionAvailable() ? 'enc:' + safeStorage.encryptString(plain).toString('base64') : plain),
+    open: (sealed) => (sealed.startsWith('enc:') ? safeStorage.decryptString(Buffer.from(sealed.slice(4), 'base64')) : sealed),
+  });
+}
+
+function createEngine(root: string) {
+  const paths = new FrogPaths(root);
   paths.ensure();
-  // The self-test uses a throwaway folder; skip the keychain so it can never prompt.
-  const encryption = !smokeDir && safeStorage.isEncryptionAvailable();
+  const encryption = encryptionAvailable();
   const secrets = new FileSecretBox(
     path.join(paths.stateDir, 'secrets.json'),
     encryption ? (plain) => safeStorage.encryptString(plain).toString('base64') : undefined,
@@ -143,41 +160,89 @@ function createEngine() {
   return created;
 }
 
+/** The running team. Calls before sign-in have nothing to talk to. */
+function team() {
+  if (!engine) throw new Error('Sign in first');
+  return engine;
+}
+
+/** Start the team for whoever is signed in (or the one local team when accounts are off). */
+async function startEngine() {
+  if (engine) return;
+  const user = accounts.user;
+  if (accounts.required && !user) return;
+  const created = createEngine(accounts.rootFor(user?.id));
+  created.onEvent((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('frog:event', event);
+  });
+  await created.start();
+  engine = created;
+}
+
+function stopEngine() {
+  engine?.stop();
+  engine = null;
+}
+
+/** Sign-in calls from the UI. The team starts on sign-in and stops on sign-out. */
+function buildAuthApi(): AuthApi {
+  return {
+    status: async () => accounts.status(),
+    signUp: async (email, password, name) => {
+      const status = await accounts.signUp(email, password, name);
+      await startEngine();
+      return status;
+    },
+    signIn: async (email, password) => {
+      const status = await accounts.signIn(email, password);
+      await startEngine();
+      return status;
+    },
+    signOut: async () => {
+      stopEngine();
+      await accounts.signOut();
+      // A fresh page drops everything the last account had on screen.
+      mainWindow?.webContents.reload();
+    },
+    updateProfile: (patch) => accounts.updateProfile(patch),
+  };
+}
+
 /** The FrogApi the UI calls, backed by the engine. */
 function buildApi(): FrogApi {
   return {
-    snapshot: async () => engine.snapshot(),
-    messages: async (id) => engine.messages(id),
-    sendMessage: (id, text) => engine.sendMessage(id, text),
-    stopConversation: (id) => engine.stopConversation(id),
-    createAgent: async (input) => engine.createAgent(input),
-    updateAgent: async (id, patch) => engine.updateAgent(id, patch),
-    deleteAgent: async (id) => engine.deleteAgent(id),
-    createGroup: async (title, members) => engine.createGroup(title, members),
-    updateGroup: async (id, patch) => engine.updateGroup(id, patch),
-    setMode: (id, mode) => engine.setMode(id, mode),
-    openAgentBrowser: (id, url) => engine.openAgentBrowser(id, url),
-    deleteConversation: async (id) => engine.deleteConversation(id),
-    answerQuestion: (id, answer) => engine.answerQuestion(id, answer),
-    decideApproval: (id, decision) => engine.decideApproval(id, decision),
-    decideAgentRequest: (id, decision) => engine.decideAgentRequest(id, decision),
-    setApiKey: (key) => engine.setApiKey(key),
-    updateSettings: (patch) => engine.updateSettings(patch),
-    addIntegration: async (input) => engine.addIntegration(input),
-    removeIntegration: async (id) => engine.integrations.remove(id),
-    setIntegrationEnabled: async (id, enabled) => engine.integrations.setEnabled(id, enabled),
-    connectIntegration: (id) => engine.integrations.connect(id),
-    disconnectIntegration: async (id) => engine.integrations.disconnect(id),
-    listFiles: async (agentId, sub) => engine.listFiles(agentId, sub),
+    snapshot: async () => team().snapshot(),
+    messages: async (id) => team().messages(id),
+    sendMessage: (id, text) => team().sendMessage(id, text),
+    stopConversation: (id) => team().stopConversation(id),
+    createAgent: async (input) => team().createAgent(input),
+    updateAgent: async (id, patch) => team().updateAgent(id, patch),
+    deleteAgent: async (id) => team().deleteAgent(id),
+    createGroup: async (title, members) => team().createGroup(title, members),
+    updateGroup: async (id, patch) => team().updateGroup(id, patch),
+    setMode: (id, mode) => team().setMode(id, mode),
+    openAgentBrowser: (id, url) => team().openAgentBrowser(id, url),
+    deleteConversation: async (id) => team().deleteConversation(id),
+    answerQuestion: (id, answer) => team().answerQuestion(id, answer),
+    decideApproval: (id, decision) => team().decideApproval(id, decision),
+    decideAgentRequest: (id, decision) => team().decideAgentRequest(id, decision),
+    setApiKey: (key) => team().setApiKey(key),
+    updateSettings: (patch) => team().updateSettings(patch),
+    addIntegration: async (input) => team().addIntegration(input),
+    removeIntegration: async (id) => team().integrations.remove(id),
+    setIntegrationEnabled: async (id, enabled) => team().integrations.setEnabled(id, enabled),
+    connectIntegration: (id) => team().integrations.connect(id),
+    disconnectIntegration: async (id) => team().integrations.disconnect(id),
+    listFiles: async (agentId, sub) => team().listFiles(agentId, sub),
     // Only things Frog Bot owns can be opened from the UI (never an arbitrary program).
     openPath: async (target) => {
-      if (!FrogPaths.isInside(engine.paths.root, target)) throw new Error('Frog Bot only opens files inside FrogsWorld');
+      if (!FrogPaths.isInside(team().paths.root, target)) throw new Error('Frog Bot only opens files inside FrogsWorld');
       await host.openPath(target);
     },
-    deleteTask: async (id) => engine.deleteTask(id),
-    logs: async (limit) => engine.logs(limit),
-    clearLogs: async () => engine.clearLogs(),
-    openLogsFolder: () => host.openPath(engine.paths.logsDir),
+    deleteTask: async (id) => team().deleteTask(id),
+    logs: async (limit) => team().logs(limit),
+    clearLogs: async () => team().clearLogs(),
+    openLogsFolder: () => host.openPath(team().paths.logsDir),
   };
 }
 
@@ -256,7 +321,7 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open Frog Bot', click: () => showWindow() },
-      { label: 'Open FrogsWorld folder', click: () => shell.openPath(engine.paths.root) },
+      { label: 'Open FrogsWorld folder', click: () => shell.openPath(engine?.paths.root ?? accounts.rootFor()) },
       { type: 'separator' },
       {
         label: 'Quit Frog Bot',
@@ -281,8 +346,9 @@ app.on('window-all-closed', () => {
 });
 
 app.whenReady().then(async () => {
-  engine = createEngine();
+  accounts = createAccounts();
   const api = buildApi();
+  const authApi = buildAuthApi();
 
   ipcMain.handle('frog:call', async (event, method: keyof FrogApi, args: unknown[]) => {
     if (!isTrustedSender(event.senderFrame?.url)) throw new Error('Not allowed from this page');
@@ -292,22 +358,26 @@ app.whenReady().then(async () => {
       const fn = api[method] as (...a: unknown[]) => Promise<unknown>;
       const result = await fn(...(Array.isArray(args) ? args : []));
       if (method !== 'logs' && method !== 'messages' && method !== 'snapshot' && method !== 'listFiles') {
-        engine.log.debug('ui', `${method} ok (${Date.now() - started} ms)`);
+        engine?.log.debug('ui', `${method} ok (${Date.now() - started} ms)`);
       }
       return result;
     } catch (err) {
-      engine.log.warn('ui', `${method} failed`, err instanceof Error ? err.message : String(err));
+      engine?.log.warn('ui', `${method} failed`, err instanceof Error ? err.message : String(err));
       throw err;
     }
   });
 
-  engine.onEvent((event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('frog:event', event);
+  ipcMain.handle('frog:auth', async (event, method: keyof AuthApi, args: unknown[]) => {
+    if (!isTrustedSender(event.senderFrame?.url)) throw new Error('Not allowed from this page');
+    if (!AUTH_API_METHODS.includes(method)) throw new Error(`Unknown method: ${String(method)}`);
+    const fn = authApi[method] as (...a: unknown[]) => Promise<unknown>;
+    return fn(...(Array.isArray(args) ? args : []));
   });
 
   Menu.setApplicationMenu(null);
   try {
-    await engine.start();
+    await accounts.restore();
+    await startEngine();
   } catch (err) {
     dialog.showErrorBox('Frog Bot could not start', err instanceof Error ? err.message : String(err));
     quitting = true;
@@ -318,7 +388,7 @@ app.whenReady().then(async () => {
   if (!smokeDir) createTray();
 
   if (smokeDir) {
-    const code = await runSmoke({ engine, window: mainWindow!, outDir: smokeDir });
+    const code = await runSmoke({ engine: team(), window: mainWindow!, outDir: smokeDir });
     quitting = true;
     app.exit(code);
   }

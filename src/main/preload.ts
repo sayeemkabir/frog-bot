@@ -4,6 +4,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 contextBridge.exposeInMainWorld('frog', {
   platform: process.platform,
   call: (method: string, args: unknown[]) => ipcRenderer.invoke('frog:call', method, args),
+  auth: (method: string, args: unknown[]) => ipcRenderer.invoke('frog:auth', method, args),
   onEvent: (listener: (event: unknown) => void) => {
     const handler = (_e: IpcRendererEvent, event: unknown) => listener(event);
     ipcRenderer.on('frog:event', handler);

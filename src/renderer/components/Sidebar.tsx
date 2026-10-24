@@ -13,6 +13,7 @@ export function Sidebar() {
   const settings = useStore((s) => s.settings);
   const integrations = useStore((s) => s.integrations);
   const integrationStatus = useStore((s) => s.integrationStatus);
+  const me = useStore((s) => s.auth?.user);
   const [query, setQuery] = useState('');
   const [menu, setMenu] = useState(false);
 
@@ -100,8 +101,20 @@ export function Sidebar() {
           </span>
         </button>
         <div className="workspace-row">
-          <div className="workspace-badge">{workspace.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}</div>
-          <div className="workspace-name" title={workspace}>{workspace}</div>
+          {me ? (
+            <button className="me-button" data-testid="open-profile" title="Your profile" onClick={() => setState({ sheet: 'profile' })}>
+              <Avatar agent={me.profile} size={28} />
+              <span className="workspace-name">
+                {me.profile.name}
+                <small>{me.email}</small>
+              </span>
+            </button>
+          ) : (
+            <>
+              <div className="workspace-badge">{workspace.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}</div>
+              <div className="workspace-name" title={workspace}>{workspace}</div>
+            </>
+          )}
           <button className="icon-btn" data-testid="open-settings" title="Settings" onClick={() => setState({ sheet: 'settings' })}><Icon.Gear /></button>
         </div>
       </div>

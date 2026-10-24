@@ -1,8 +1,9 @@
-import { FROG_API_METHODS, type EngineEvent, type FrogApi } from '../shared/types';
+import { AUTH_API_METHODS, FROG_API_METHODS, type AuthApi, type EngineEvent, type FrogApi } from '../shared/types';
 
 interface DesktopBridge {
   platform: string;
   call(method: string, args: unknown[]): Promise<unknown>;
+  auth(method: string, args: unknown[]): Promise<unknown>;
   onEvent(listener: (event: EngineEvent) => void): () => void;
   onFocusConversation(listener: (conversationId: string) => void): () => void;
 }
@@ -91,3 +92,20 @@ function serverTransport(): Transport {
 
 export const transport: Transport = window.frog ? desktopTransport(window.frog) : serverTransport();
 export const api = transport.api;
+
+const cleanError = (err: Error) => {
+  throw new Error(String(err?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+};
+
+/** Accounts (desktop only). The hosted server keeps its own token sign-in, so accounts are off there. */
+export const authApi: AuthApi = window.frog
+  ? (Object.fromEntries(
+      AUTH_API_METHODS.map((m) => [m, (...args: unknown[]) => window.frog!.auth(m, args).catch(cleanError)]),
+    ) as unknown as AuthApi)
+  : {
+      status: async () => ({ required: false, user: null }),
+      signUp: async () => { throw new Error('Accounts are only in the desktop app'); },
+      signIn: async () => { throw new Error('Accounts are only in the desktop app'); },
+      signOut: async () => undefined,
+      updateProfile: async () => { throw new Error('Accounts are only in the desktop app'); },
+    };

@@ -474,6 +474,9 @@ a:hover { text-decoration: underline; }
 .auth-switch { color: var(--text-faint); font-size: 13px; text-align: center; }
 .auth-switch button { border: 0; background: none; color: var(--accent); padding: 0; font-weight: 550; }
 .auth-note { color: var(--text-faint); font-size: 11.5px; text-align: center; line-height: 1.5; }
+.auth-error { padding: 9px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(229, 72, 77, 0.35); background: var(--danger-soft); color: #ffc9cb; font-size: 13px; }
+.auth-submit { padding: 11px; font-size: 14.5px; margin-top: 4px; }
+.me-button { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; text-align: left; color: inherit; }
 .steps { display: grid; gap: 8px; text-align: left; }
 .step { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
 .step b { display: block; font-weight: 600; }
