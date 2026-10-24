@@ -234,6 +234,10 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     }
     await click('[data-testid="toggle-panel"]');
     check('Agent panel closes', await waitFor(`!document.querySelector('[data-testid="panel"]')`));
+    await click('[data-testid="toggle-panel"]');
+    await waitFor(`document.querySelector('[data-testid="panel"]')`);
+    await click('[data-testid="close-panel"]');
+    check('Panel closes from its own X button', await waitFor(`!document.querySelector('[data-testid="panel"]')`));
 
     // Integrations sheet.
     await caption("Checking Integrations (the browser and app templates)");

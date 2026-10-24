@@ -371,7 +371,8 @@ a:hover { text-decoration: underline; }
 
 /* ───── right panel ───── */
 .panel { border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--surface); }
-.panel-head { padding: 20px 18px 10px; display: grid; justify-items: center; gap: 6px; text-align: center; }
+.panel-head { position: relative; padding: 20px 18px 10px; display: grid; justify-items: center; gap: 6px; text-align: center; }
+.panel-close { position: absolute; top: 10px; right: 10px; }
 .panel-name { font-weight: 650; font-size: 15px; }
 .label-input { border: 0; outline: 0; background: transparent; text-align: center; color: var(--text-faint); font-size: 12.5px; width: 100%; border-radius: 6px; padding: 2px 6px; }
 .label-input:hover, .label-input:focus { background: var(--surface-2); color: var(--text-dim); }

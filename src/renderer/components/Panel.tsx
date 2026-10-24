@@ -31,6 +31,7 @@ function AgentPanel({ agent }: { agent: Agent }) {
   return (
     <aside className="panel" data-testid="panel">
       <div className="panel-head">
+        <PanelClose />
         <Avatar agent={agent} size={64} status={runtime?.status ?? 'idle'} />
         <div className="panel-name">{agent.name}</div>
         <input className="label-input" value={label} placeholder="Add a label" onChange={(e) => setLabel(e.target.value)} onBlur={saveLabel} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
@@ -288,6 +289,7 @@ function GroupPanel({ conversation, agents, agentById }: { conversation: Convers
   return (
     <aside className="panel" data-testid="panel">
       <div className="panel-head">
+        <PanelClose />
         <GroupAvatar members={members} size={64} />
         <div className="panel-name">{conversation.title}</div>
         <div className="muted">{plural(members.length, "member")}</div>
@@ -320,5 +322,13 @@ function GroupPanel({ conversation, agents, agentById }: { conversation: Convers
         </ConfirmButton>
       </div>
     </aside>
+  );
+}
+
+function PanelClose() {
+  return (
+    <button className="icon-btn panel-close" title="Close" data-testid="close-panel" onClick={() => setState({ panelOpen: false })}>
+      <Icon.Close size={16} />
+    </button>
   );
 }
