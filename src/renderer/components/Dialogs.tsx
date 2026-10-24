@@ -79,7 +79,8 @@ export function AgentDialog() {
 export function GroupDialog() {
   const agents = useStore((s) => s.agents);
   const [title, setTitle] = useState('');
-  const [members, setMembers] = useState<string[]>(agents.map((a) => a.id));
+  // Nobody is in a new group until you pick them.
+  const [members, setMembers] = useState<string[]>([]);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();

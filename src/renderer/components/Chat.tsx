@@ -305,7 +305,36 @@ function Composer({ conversation, members }: { conversation: Conversation; membe
     const body = text.trim();
     if (!body) return;
     setText('');
+    setMention(null);
     await attempt(() => api.sendMessage(conversation.id, body), 'Could not send');
+  };
+
+  // @mention autocomplete: who can be mentioned here, and what has been typed after "@".
+  const [mention, setMention] = useState<{ query: string; start: number; index: number } | null>(null);
+  const mentionable = conversation.kind === 'group' ? members : agents.filter((a) => a.id !== conversation.memberIds[0]);
+  const suggestions = mention
+    ? mentionable.filter((a) => a.name.toLowerCase().startsWith(mention.query.toLowerCase())).slice(0, 6)
+    : [];
+  const updateMention = (value: string, caret: number) => {
+    const m = /(^|\s)@([^@\n]{0,30})$/.exec(value.slice(0, caret));
+    if (!m) return setMention(null);
+    const query = m[2];
+    const start = caret - query.length - 1;
+    const any = mentionable.some((a) => a.name.toLowerCase().startsWith(query.toLowerCase()));
+    setMention(any ? { query, start, index: 0 } : null);
+  };
+  const pick = (agent: Agent) => {
+    if (!mention) return;
+    const el = ref.current;
+    const caret = el?.selectionStart ?? text.length;
+    const next = `${text.slice(0, mention.start)}@${agent.name} ${text.slice(caret)}`;
+    setText(next);
+    setMention(null);
+    const pos = mention.start + agent.name.length + 2;
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
   };
 
   return (
@@ -320,14 +349,51 @@ function Composer({ conversation, members }: { conversation: Conversation; membe
         </div>
       )}
       <form className="composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
+        {suggestions.length > 0 && (
+          <div className="mention-popup" role="listbox" data-testid="mention-popup">
+            {suggestions.map((a, i) => (
+              <button
+                type="button"
+                key={a.id}
+                role="option"
+                aria-selected={i === mention!.index}
+                className={`mention-option ${i === mention!.index ? 'on' : ''}`}
+                onMouseDown={(e) => { e.preventDefault(); pick(a); }}
+              >
+                <Avatar agent={a} size={22} />
+                <b>{a.name}</b>
+                <span className="muted">{a.label}</span>
+              </button>
+            ))}
+            <div className="mention-hint">Tab or Enter to insert · Esc to close</div>
+          </div>
+        )}
         <textarea
           ref={ref}
           rows={1}
           data-testid="composer"
-          placeholder={conversation.kind === 'group' ? `Message ${conversation.title}… (use @Name for one agent)` : `Message ${conversation.title}…`}
+          placeholder={conversation.kind === 'group' ? `Message ${conversation.title}… (type @ to mention an agent)` : `Message ${conversation.title}…`}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); updateMention(e.target.value, e.target.selectionStart ?? e.target.value.length); }}
           onKeyDown={(e) => {
+            if (suggestions.length > 0) {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const step = e.key === 'ArrowDown' ? 1 : -1;
+                setMention((m) => m && { ...m, index: (m.index + step + suggestions.length) % suggestions.length });
+                return;
+              }
+              if ((e.key === 'Tab' && !e.shiftKey) || (e.key === 'Enter' && !e.shiftKey)) {
+                e.preventDefault();
+                pick(suggestions[mention!.index] ?? suggestions[0]);
+                return;
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setMention(null);
+                return;
+              }
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               send();

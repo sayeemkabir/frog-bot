@@ -644,3 +644,14 @@ a { color: var(--accent); }
 /* Setup steps above an integration form */
 .setup-help { display: grid; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(79,195,247,.3); background: rgba(79,195,247,.08); }
 .setup-help p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+
+/* @mention autocomplete */
+.composer { position: relative; }
+.mention-popup {
+  position: absolute; left: 10px; bottom: calc(100% + 8px); z-index: 30; min-width: 280px; max-width: 420px; padding: 6px;
+  border-radius: 12px; border: 1px solid rgba(255,255,255,.1); background: rgba(22,26,24,.98); box-shadow: 0 16px 40px rgba(0,0,0,.45);
+}
+.mention-option { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 9px; border: 0; border-radius: 8px; background: transparent; color: var(--text); text-align: left; font-size: 13.5px; }
+.mention-option .muted { margin-left: auto; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+.mention-option.on, .mention-option:hover { background: rgba(255,255,255,.07); }
+.mention-hint { padding: 6px 9px 2px; font-size: 11px; color: var(--text-faint); }

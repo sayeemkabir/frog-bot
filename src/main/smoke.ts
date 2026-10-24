@@ -147,6 +147,13 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     await click(`[data-conversation-id="${group.id}"]`);
     check('Group opens with members panel', await waitFor(`document.querySelector('[data-testid="chat-title"]')?.textContent.includes('Sam Bots')`));
     await shot('04-group');
+    // @mention autocomplete: "@Do" suggests Docs Guy, Tab inserts the full name.
+    await typeInto('[data-testid="composer"]', 'Hey @Do');
+    check('Typing @ suggests matching agents', await waitFor(`document.querySelector('[data-testid="mention-popup"]')?.textContent.includes('Docs Guy')`, 3000));
+    await shot('04b-mention');
+    await js(`document.querySelector('[data-testid="composer"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))`);
+    check('Tab completes the agent name', await waitFor(`document.querySelector('[data-testid="composer"]').value === 'Hey @Docs Guy '`, 3000));
+    await typeInto('[data-testid="composer"]', '');
 
     // Sending without a key surfaces a clear error in the chat.
     await caption("Saying hi to Frog (a real AI reply)");
