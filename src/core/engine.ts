@@ -93,6 +93,19 @@ const API_KEY_SECRET = 'anthropic_api_key';
 const OPENAI_KEY_SECRET = 'openai_api_key';
 const MAX_RELAY_DEPTH = 6;
 const MAX_MESSAGES_PER_TURN = 6;
+
+/** Frog's job: the team's chief of staff (the working model of Grok Bot's Chief of Staff). */
+const FROG_INSTRUCTIONS = `You are the chief of staff. The user talks to you; you run the team.
+- Small or quick jobs: just do them yourself, fast.
+- Bigger jobs: split them into parts and hand each part to the right teammate with message_agent, all in one go so they work at the same time. Say in one line who is doing what, then end your turn. You are woken up as answers come back.
+- When the answers are in, combine them into one short brief for the user. End with "Needs your approval:" listing anything that spends money, sends or publishes for the user, or deletes, if there is any.
+- Do not do a specialist's work yourself while they are on it, and do not chase them.
+- If the team is missing a role the work needs, propose it with request_new_agent (name, one-line role, instructions).
+- For work several teammates must discuss or decide together, use create_group and hand out the first steps with @Name.
+- Keep the user informed in plain words.`;
+
+/** Earlier default instructions, upgraded automatically to FROG_INSTRUCTIONS if the user never changed them. */
+const OLD_FROG_INSTRUCTIONS = "You are the lead agent. Take the user's requests, break them into steps, do what you can yourself, and hand specialist work to teammates with message_agent. If the team is missing a role, use request_new_agent. Keep the user informed and ask before anything that speaks for them.";
 /** How many @mention hand-offs a group discussion may chain before it pauses for the user. */
 const MAX_GROUP_DEPTH = 12;
 /** A message that only says thanks / got it, with no question and no new work. */
@@ -202,6 +215,9 @@ export class FrogEngine {
     this.log.info('app', `Frog Bot started on ${this.host.platform}`, { home: this.paths.root });
     this.recoverInterrupted();
     if (this.agentsDoc.value.length === 0) this.seed();
+    // Upgrade Frog to the chief-of-staff role unless the user wrote their own instructions.
+    const frog = this.agentsDoc.value.find((a) => a.name === 'Frog' && a.instructions === OLD_FROG_INSTRUCTIONS);
+    if (frog) this.updateAgent(frog.id, { instructions: FROG_INSTRUCTIONS, label: 'Chief of staff: plans the work and runs the team' });
     this.timers.push(setInterval(() => this.runDueTasks(), 30_000));
     this.applyWatchMode();
     this.refreshOpenAiModels().catch((err) => this.log.warn('openai', 'Model list failed', String(err)));
@@ -246,9 +262,8 @@ export class FrogEngine {
   private seed() {
     this.createAgent({
       name: 'Frog',
-      label: 'Your right hand: plans the work and runs the team',
-      instructions:
-        'You are the lead agent. Take the user\'s requests, break them into steps, do what you can yourself, and hand specialist work to teammates with message_agent. If the team is missing a role, use request_new_agent. Keep the user informed and ask before anything that speaks for them.',
+      label: 'Chief of staff: plans the work and runs the team',
+      instructions: FROG_INSTRUCTIONS,
       emoji: '🐸',
       color: '#3ddc84',
     });
