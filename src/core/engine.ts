@@ -92,6 +92,10 @@ const API_KEY_SECRET = 'anthropic_api_key';
 const OPENAI_KEY_SECRET = 'openai_api_key';
 const MAX_RELAY_DEPTH = 6;
 const MAX_MESSAGES_PER_TURN = 6;
+/** How many @mention hand-offs a group discussion may chain before it pauses for the user. */
+const MAX_GROUP_DEPTH = 12;
+/** A message that only says thanks / got it, with no question and no new work. */
+const ACKNOWLEDGEMENT = /^(thanks|thank you|thx|ty|got it|received|noted|great|perfect|awesome|ok(ay)?|sounds good|will do|understood|cheers|appreciate it|much appreciated)\b[^?]{0,100}$/i;
 const ACTIVITY_LIMIT = 150;
 const NO_REPLY = /^\(?\s*no reply\s*\)?\.?$/i;
 const AGENT_COLORS = ['#3ddc84', '#ff5a5f', '#ffb74d', '#4fc3f7', '#ba68c8', '#f06292', '#aed581', '#90a4ae'];
@@ -125,6 +129,10 @@ export class FrogEngine {
   private active = new Map<ID, { conversationId: ID; abort: AbortController }>();
   private waiters = new Map<ID, { conversationId: ID; resolve: (value: string) => void }>();
   private runningTasks = new Set<ID>();
+  /** Messages waiting for a teammate who has not started on them yet (merged into one turn). */
+  private pendingRelays = new Map<string, string[]>();
+  /** Agents already queued to answer in a group (so several @mentions wake them once). */
+  private pendingGroupTurns = new Set<string>();
   private listeners = new Set<(event: EngineEvent) => void>();
   private timers: NodeJS.Timeout[] = [];
   private releaseLock?: () => void;
@@ -204,6 +212,7 @@ export class FrogEngine {
     if (this.watchTimer) clearInterval(this.watchTimer);
     for (const { abort } of this.active.values()) abort.abort();
     this.flush();
+    void this.openaiRunner.dispose();
     this.log.info('app', 'Frog Bot stopped');
     this.releaseLock?.();
     this.releaseLock = undefined;
@@ -499,6 +508,33 @@ export class FrogEngine {
     }
   }
 
+  /**
+   * An agent wrote in a group and mentioned teammates as @Name: hand them the
+   * next step there (Grok Bot's baton pass). Each mentioned teammate is queued
+   * once, and long chains pause so the group cannot run away.
+   */
+  private handOffInGroup(from: Agent, conversationId: ID, text: string, depth: number, mode: Mode) {
+    const group = this.conversation(conversationId);
+    if (!group || group.kind !== 'group') return;
+    const members = this.agentsDoc.value.filter((a) => group.memberIds.includes(a.id) && a.id !== from.id);
+    const mentioned = findMentions(text, members);
+    if (!mentioned.length) return;
+    if (depth >= MAX_GROUP_DEPTH) {
+      this.log.warn(`agent:${from.name}`, `Group "${group.title}" paused after ${MAX_GROUP_DEPTH} hand-offs`);
+      this.addMessage(conversationId, { author: { kind: 'system' }, kind: 'text', text: `The team paused after ${MAX_GROUP_DEPTH} hand-offs. Reply to keep them going.` });
+      return;
+    }
+    for (const agentId of mentioned) {
+      const key = `${agentId}|${conversationId}`;
+      if (this.pendingGroupTurns.has(key)) continue;
+      this.pendingGroupTurns.add(key);
+      this.enqueueTurn(agentId, conversationId, { kind: 'relay', fromAgentId: from.id, depth: depth + 1, mode }, () => {
+        this.pendingGroupTurns.delete(key);
+        return this.groupPrompt(agentId, conversationId);
+      });
+    }
+  }
+
   /** Everything said in the group since this agent last spoke. */
   private groupPrompt(agentId: ID, conversationId: ID) {
     const conversation = this.conversation(conversationId);
@@ -619,6 +655,8 @@ export class FrogEngine {
     const provider = this.provider();
     // Sessions are per brain: a Claude session id means nothing to OpenAI and vice versa.
     const sessionKey = provider === 'openai' ? `${agentId}:openai` : agentId;
+    const depth = origin.kind === 'relay' ? origin.depth : 0;
+    const turnMode = this.modeFor(agent, conversation, origin);
     let streamingId: ID | null = null;
     let lastError: string | undefined;
 
@@ -648,6 +686,7 @@ export class FrogEngine {
           this.addMessage(conversationId, { author: { kind: 'agent', agentId }, kind: 'text', text: finalText });
           this.log.info(source, 'Replied', finalText);
         }
+        if (!NO_REPLY.test(finalText)) this.handOffInGroup(agent, conversationId, finalText, depth, turnMode);
         streamingId = null;
       },
       tool: (_id, name, input) => {
@@ -703,7 +742,6 @@ export class FrogEngine {
         platform: this.host.platform,
         mode: this.modeFor(agent, conversation, origin),
       });
-      const depth = origin.kind === 'relay' ? origin.depth : 0;
       const servers = await this.integrations.serversFor(agent.integrations, {
         slug: agent.folder,
         browserProfile: this.paths.agentBrowserProfile(agent.folder),
@@ -912,6 +950,11 @@ export class FrogEngine {
         const target = this.agentByName(to);
         if (!target) return `No agent named "${to}". Team: ${this.agentsDoc.value.map((a) => a.name).join(', ')}`;
         if (target.id === agent.id) return 'That is you. Pick a teammate.';
+        if (ACKNOWLEDGEMENT.test(message.trim())) {
+          // A "thanks" would wake the teammate for nothing (and invite a "you're welcome").
+          this.log.debug(source, `Skipped an acknowledgement to ${target.name}`);
+          return 'Not sent: no need to acknowledge. If the work is done, report the result to whoever asked you and end your turn.';
+        }
         if (depth >= MAX_RELAY_DEPTH) {
           this.log.warn(source, `Relay to ${target.name} blocked: too many hand-offs in a row`);
           return 'Not delivered: this chain of hand-offs is too long. Summarize for the user and ask how to continue.';
@@ -931,17 +974,45 @@ export class FrogEngine {
         if (destination.id !== conversationId) this.addMessage(destination.id, relay);
         this.log.info(source, `Messaged ${target.name}${inGroup ? ` in "${here!.title}"` : ''}`, message);
         const where = inGroup ? `in the group chat "${here!.title}"` : 'in your own chat';
-        const prompt = `[Message from your teammate ${agent.name}${agent.label ? ` (${agent.label})` : ''}, ${where}]\n${message}\n\nDo what is asked. To answer ${agent.name}, use message_agent. What you write here is shown to the user.`;
         if (inGroup) {
           // Group turns read new messages since they last spoke; mark this one seen so it is not repeated.
           this.conversationsDoc.update(() => {
             destination.seen[target.id] = Math.max(destination.seen[target.id] ?? 0, Date.now());
           });
         }
-        this.enqueueTurn(target.id, destination.id, { kind: 'relay', fromAgentId: agent.id, depth: depth + 1, mode }, () => prompt);
+        // If this teammate already has a message from this agent waiting, add to it
+        // instead of waking them up once per message.
+        const pendingKey = `${target.id}|${destination.id}|${agent.id}`;
+        const pending = this.pendingRelays.get(pendingKey);
+        if (pending) {
+          pending.push(message);
+          return `Added to your earlier message to ${target.name}; they will get both together. End your turn now; you will be woken up when they answer.`;
+        }
+        this.pendingRelays.set(pendingKey, [message]);
+        this.enqueueTurn(target.id, destination.id, { kind: 'relay', fromAgentId: agent.id, depth: depth + 1, mode }, () => {
+          const messages = this.pendingRelays.get(pendingKey) ?? [message];
+          this.pendingRelays.delete(pendingKey);
+          return `[Message from your teammate ${agent.name}${agent.label ? ` (${agent.label})` : ''}, ${where}]\n${messages.join('\n\n')}\n\nDo what is asked, fully. Then send the result to ${agent.name} with message_agent in one message. What you write here is shown to the user.`;
+        });
         return inGroup
-          ? `Delivered to ${target.name} here in the group. Their answer will appear in this chat.`
-          : `Delivered to ${target.name}. They will work on it in their own chat and can message you back.`;
+          ? `Delivered to ${target.name} here in the group. Their answer will appear in this chat. End your turn now; you will be woken up when they answer.`
+          : `Delivered to ${target.name}. End your turn now: you will be woken up automatically when they answer. Do not check in or redo their work meanwhile.`;
+      },
+
+      createGroup: async (name, memberNames, message) => {
+        const found = memberNames.map((n) => this.agentByName(n));
+        const missing = memberNames.filter((_, i) => !found[i]);
+        if (missing.length) return `No agent named ${missing.map((m) => `"${m}"`).join(', ')}. Team: ${this.agentsDoc.value.map((a) => a.name).join(', ')}`;
+        const ids = [...new Set([agent.id, ...found.map((a) => a!.id)])];
+        if (ids.length < 2) return 'A group needs at least one teammate besides you.';
+        const group = this.createGroup(name.trim() || `${agent.name}'s group`, ids);
+        this.conversationsDoc.update(() => {
+          group.mode = mode;
+        });
+        this.log.info(source, `Created the group "${group.title}"`, found.map((a) => a!.name).join(', '));
+        this.addMessage(group.id, { author: { kind: 'agent', agentId: agent.id }, kind: 'text', text: message });
+        this.handOffInGroup(agent, group.id, message, depth, mode);
+        return `Created "${group.title}" with ${found.map((a) => a!.name).join(', ')} and posted your message. Teammates you mentioned with @Name start now; the discussion continues there.`;
       },
 
       askUser: async (question, options) => {

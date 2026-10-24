@@ -5,6 +5,7 @@ import { z } from 'zod';
 export interface TeamBridge {
   listTeam(): { name: string; label: string; status: string }[];
   messageAgent(to: string, message: string): Promise<string>;
+  createGroup(name: string, members: string[], message: string): Promise<string>;
   askUser(question: string, options: string[]): Promise<string>;
   requestAgent(input: { name: string; label: string; instructions: string; reason: string }): Promise<string>;
   notifyUser(title: string, body: string): void;
@@ -32,9 +33,19 @@ export function createTeamServer(bridge: TeamBridge) {
       }),
       tool(
         'message_agent',
-        'Send a message to another agent on the team. They see it in their own thread and act on it. Use this to hand off work, ask a teammate for something, or report back.',
+        'Hand work to a teammate or send them a result. They act on it and message you back; you are woken up automatically then, so end your turn after sending. Several messages to the same busy teammate are combined. Never send thanks or acknowledgements.',
         { to: z.string().describe('Exact name of the agent'), message: z.string().describe('What you want them to know or do') },
         async ({ to, message }) => text(await bridge.messageAgent(to, message)),
+      ),
+      tool(
+        'create_group',
+        'Start a group chat with teammates when several of you need to discuss, teach each other, or decide something together. You are added automatically. Your opening message is posted there; mention a teammate as @Name to hand them the first step.',
+        {
+          name: z.string().describe('Group name, e.g. "Launch plan"'),
+          members: z.array(z.string()).min(1).max(5).describe('Exact names of the teammates to add'),
+          message: z.string().describe('Opening message: the goal, who does what (use @Name), and what the group must decide or deliver'),
+        },
+        async ({ name, members, message }) => text(await bridge.createGroup(name, members, message)),
       ),
       tool(
         'ask_user',

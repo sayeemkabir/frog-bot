@@ -392,4 +392,77 @@ describe('modes, waiting and group hand-offs', () => {
     expect(decisions).toEqual(['allow']);
     expect(engine.messages(dogThread.id).some((m) => m.kind === 'approval')).toBe(false);
   });
+
+  it('drops thank-you messages between agents', async () => {
+    engine.createAgent({ name: 'Dog' });
+    let dogTurns = 0;
+    runner.scripts.set('Dog', async (_r, sink) => { dogTurns++; sink.textDone('hi'); });
+    runner.scripts.set('Frog', async (_r, sink, tool) => sink.textDone(await tool('message_agent', { to: 'Dog', message: 'Thanks, got it!' })));
+    await engine.sendMessage(frogThread().id, 'go');
+    await engine.idle();
+    expect(dogTurns).toBe(0);
+  });
+
+  it('merges messages sent to a busy teammate into one turn', async () => {
+    const { conversation: dogThread } = engine.createAgent({ name: 'Dog' });
+    let release!: () => void;
+    const busy = new Promise<void>((r) => (release = r));
+    const prompts: string[] = [];
+    runner.scripts.set('Dog', async (req, sink) => {
+      prompts.push(req.prompt);
+      if (prompts.length === 1) await busy; // Dog is in the middle of something.
+      sink.textDone('done');
+    });
+    runner.scripts.set('Frog', async (_r, sink, tool) => {
+      await tool('message_agent', { to: 'Dog', message: 'find the price' });
+      await tool('message_agent', { to: 'Dog', message: 'any update?' });
+      await tool('message_agent', { to: 'Dog', message: 'also the date' });
+      sink.textDone('asked');
+    });
+    await engine.sendMessage(dogThread.id, 'start a long job');
+    await until(() => prompts.length === 1);
+    await engine.sendMessage(frogThread().id, 'go');
+    await until(() => engine.snapshot().runtimes[frogThread().memberIds[0]]?.status === 'idle');
+    release();
+    await engine.idle();
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain('find the price');
+    expect(prompts[1]).toContain('also the date');
+  });
+
+  it('agents can create a group and pass work with @mentions there', async () => {
+    engine.createAgent({ name: 'Dog' });
+    const order: string[] = [];
+    runner.scripts.set('Frog', async (req, sink, tool) => {
+      order.push('Frog:' + (req.prompt.startsWith('[Group chat') ? 'group' : 'own'));
+      if (!req.prompt.startsWith('[Group chat')) {
+        sink.textDone(await tool('create_group', { name: 'Omelette crew', members: ['Dog'], message: '@Dog please write the recipe' }));
+      } else sink.textDone('Great, recipe is done.');
+    });
+    runner.scripts.set('Dog', async (req, sink) => {
+      order.push('Dog:' + (req.prompt.includes('please write the recipe') ? 'got-it' : 'other'));
+      sink.textDone('Recipe written. @Frog over to you.');
+    });
+    await engine.sendMessage(frogThread().id, 'make a group with Dog for the recipe');
+    await engine.idle();
+    const group = engine.snapshot().conversations.find((c) => c.title === 'Omelette crew')!;
+    expect(group.kind).toBe('group');
+    expect(texts(group.id)).toEqual([
+      'agent:text:@Dog please write the recipe',
+      'agent:text:Recipe written. @Frog over to you.',
+      'agent:text:Great, recipe is done.',
+    ]);
+    expect(order).toEqual(['Frog:own', 'Dog:got-it', 'Frog:group']);
+  });
+
+  it('a group discussion that keeps mentioning each other pauses on its own', async () => {
+    engine.createAgent({ name: 'Dog' });
+    const group = engine.createGroup('Chatty', engine.snapshot().agents.map((a) => a.id));
+    runner.scripts.set('Frog', async (_r, sink) => sink.textDone('@Dog your turn'));
+    runner.scripts.set('Dog', async (_r, sink) => sink.textDone('@Frog your turn'));
+    await engine.sendMessage(group.id, '@Frog start');
+    await engine.idle();
+    expect(runner.prompts.length).toBeLessThanOrEqual(14);
+    expect(texts(group.id).at(-1)).toContain('paused');
+  });
 });

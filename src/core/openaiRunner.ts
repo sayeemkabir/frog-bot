@@ -63,10 +63,26 @@ const LOCAL_TOOLS: { tool: ChatCompletionTool; permission: string }[] = [
     }, ['command']),
   },
   {
+    permission: 'WebSearch',
+    tool: fn(
+      'web_search',
+      'Search the web and get a short answer with source links in one step. Use this first for any fact, news, price, video or page you need to find; it is much faster than opening the browser.',
+      { query: { type: 'string', description: 'What to find, in plain words' } },
+      ['query'],
+    ),
+  },
+  {
     permission: 'WebFetch',
     tool: fn('fetch_url', 'Download a web page or API response and return its text.', { url: { type: 'string' } }, ['url']),
   },
 ];
+
+/** Fast models given OpenAI's built-in web search tool, fastest first (gpt-4.1-mini: ~3 s per search, measured). */
+const SEARCH_TOOL_MODELS: { model: string; effort?: 'low' }[] = [{ model: 'gpt-4.1-mini' }, { model: 'gpt-5.4-nano', effort: 'low' }, { model: 'gpt-5.4-mini', effort: 'low' }];
+/** Older models that search by themselves, used only if none of the above is available. */
+const SEARCH_MODELS = ['gpt-5-search-api', 'gpt-4o-mini-search-preview', 'gpt-4o-search-preview'];
+/** Connections to apps and the browser stay open this long after an agent's last message. */
+const WARM_MS = 15 * 60 * 1000;
 
 function fn(name: string, description: string, properties: Record<string, unknown>, required: string[]): ChatCompletionTool {
   return { type: 'function', function: { name, description, parameters: { type: 'object', properties, required, additionalProperties: false } } };
@@ -76,6 +92,15 @@ interface McpHandle {
   client: Client;
   server: string;
   tools: Map<string, string>;
+  /** Tool definitions, listed once per connection. */
+  listed?: ChatCompletionTool[];
+  /** Set when the connection closes, so the next turn reconnects. */
+  dead?: boolean;
+}
+
+interface WarmConnection {
+  handle: McpHandle;
+  lastUsed: number;
 }
 
 export interface OpenAIRunnerOptions {
@@ -91,8 +116,99 @@ export interface OpenAIRunnerOptions {
  */
 export class OpenAIRunner implements TurnRunner {
   private models: string[] | null = null;
+  private allModelIds: string[] = [];
+  private retiredSearch = new Set<string>();
+  /** Open app/browser connections per agent, reused across messages (no cold start each time). */
+  private warm = new Map<string, WarmConnection>();
 
   constructor(private opts: OpenAIRunnerOptions) {}
+
+  /** Close every kept-open connection (on quit). */
+  async dispose() {
+    const all = [...this.warm.values()];
+    this.warm.clear();
+    await Promise.all(all.map((w) => w.handle.client.close().catch(() => undefined)));
+  }
+
+  private sweepWarm() {
+    const now = Date.now();
+    for (const [key, w] of this.warm) {
+      if (w.handle.dead || now - w.lastUsed > WARM_MS) {
+        this.warm.delete(key);
+        w.handle.client.close().catch(() => undefined);
+      }
+    }
+  }
+
+  /** An app connection for this agent: the kept-open one if it is still alive, otherwise a new one. */
+  private async connection(agentId: string, name: string, config: McpServerConfig, cwd: string): Promise<{ handle: McpHandle; perTurn: boolean }> {
+    const c = config as Record<string, unknown>;
+    // The team tools are bound to this turn's chat, so they are made fresh (in memory, instant).
+    if (c.type === 'sdk') return { handle: await this.connectMcp(name, config, cwd), perTurn: true };
+    const key = `${agentId}|${name}|${JSON.stringify(c)}`;
+    const existing = this.warm.get(key);
+    if (existing && !existing.handle.dead) {
+      existing.lastUsed = Date.now();
+      return { handle: existing.handle, perTurn: false };
+    }
+    const handle = await this.connectMcp(name, config, cwd);
+    handle.client.onclose = () => {
+      handle.dead = true;
+    };
+    this.warm.set(key, { handle, lastUsed: Date.now() });
+    return { handle, perTurn: false };
+  }
+
+  /**
+   * Answer a search in one step. A small fast model with OpenAI's built-in web
+   * search tool answers in about 3 seconds (measured); older search models are
+   * a fallback. Retired models are skipped automatically.
+   */
+  private async webSearch(client: OpenAI, query: string, signal: AbortSignal): Promise<string> {
+    if (!this.allModelIds.length) await this.availableModels();
+    const prompt = `${query}\n\nAnswer concisely with the key facts. Include the source URLs.`;
+    const usable = (m: string) => !this.retiredSearch.has(m) && (!this.allModelIds.length || this.allModelIds.includes(m));
+    const withSources = (answer: string, sources: string[]) => {
+      const unique = [...new Set(sources)].slice(0, 8);
+      return `${answer || '(no answer)'}${unique.length ? `\n\nSources:\n${unique.join('\n')}` : ''}`;
+    };
+    const retired = (err: unknown) => /404|deprecated|does not exist|not found|not supported/i.test(String(err));
+
+    for (const { model, effort } of SEARCH_TOOL_MODELS) {
+      if (!usable(model)) continue;
+      try {
+        const res = await client.responses.create(
+          { model, tools: [{ type: 'web_search' }], ...(effort ? { reasoning: { effort } } : {}), input: prompt },
+          { signal },
+        );
+        const sources: string[] = [];
+        for (const item of res.output) {
+          if (item.type !== 'message') continue;
+          for (const part of item.content) {
+            if (part.type !== 'output_text') continue;
+            for (const a of part.annotations ?? []) if (a.type === 'url_citation') sources.push(`${a.title}: ${a.url}`);
+          }
+        }
+        return withSources(res.output_text, sources);
+      } catch (err) {
+        if (signal.aborted || !retired(err)) throw err;
+        this.retiredSearch.add(model);
+      }
+    }
+    for (const model of SEARCH_MODELS) {
+      if (!usable(model)) continue;
+      try {
+        const res = await client.chat.completions.create({ model, web_search_options: {}, messages: [{ role: 'user', content: prompt }] }, { signal });
+        const message = res.choices[0]?.message;
+        const sources = (message?.annotations ?? []).map((a) => (a.type === 'url_citation' ? `${a.url_citation.title}: ${a.url_citation.url}` : '')).filter(Boolean);
+        return withSources(message?.content ?? '', sources);
+      } catch (err) {
+        if (signal.aborted || !retired(err)) throw err;
+        this.retiredSearch.add(model);
+      }
+    }
+    throw new Error('Web search is not available for this OpenAI key. Use fetch_url or the browser instead.');
+  }
 
   /** Chat models this key can use, best first (cached). */
   async availableModels(): Promise<string[]> {
@@ -103,6 +219,7 @@ export class OpenAIRunner implements TurnRunner {
       const client = new OpenAI({ apiKey: key });
       const ids: string[] = [];
       for await (const model of client.models.list()) ids.push(model.id);
+      this.allModelIds = ids;
       const chat = ids.filter((id) => /^(gpt-[0-9]|o[0-9])/.test(id) && !/(audio|realtime|transcribe|tts|image|search|instruct|codex|live|-\d{4}-\d{2}-\d{2})/.test(id));
       const ranked = OPENAI_MODEL_PREFERENCE.filter((m) => chat.includes(m));
       this.models = [...ranked, ...chat.filter((m) => !ranked.includes(m)).sort().reverse()];
@@ -128,29 +245,41 @@ export class OpenAIRunner implements TurnRunner {
     sink.session(sessionId);
 
     const handles: McpHandle[] = [];
+    const perTurn: McpHandle[] = [];
     try {
-      for (const [name, config] of Object.entries(req.mcpServers)) {
-        const handle = await this.connectMcp(name, config, req.cwd).catch((err) => {
-          log.warn(source, `Could not start app "${name}"`, String(err));
-          return null;
-        });
-        if (handle) handles.push(handle);
+      this.sweepWarm();
+      // Connect to all apps at once; kept-open connections come back instantly.
+      const connected = await Promise.all(
+        Object.entries(req.mcpServers).map(([name, config]) =>
+          this.connection(req.agentId, name, config, req.cwd).catch((err) => {
+            log.warn(source, `Could not start app "${name}"`, String(err));
+            return null;
+          }),
+        ),
+      );
+      for (const c of connected) {
+        if (!c) continue;
+        handles.push(c.handle);
+        if (c.perTurn) perTurn.push(c.handle);
       }
       // Tools per app. With the token saver on, only the team tools are sent up
       // front; the agent turns other apps on with use_app when it needs them,
       // which keeps dozens of tool definitions out of every request.
       const appTools = new Map<string, ChatCompletionTool[]>();
-      for (const handle of handles) {
-        const { tools } = await handle.client.listTools();
-        const list: ChatCompletionTool[] = [];
-        for (const tool of tools) {
-          const fullName = `mcp__${handle.server}__${tool.name}`.slice(0, 64);
-          handle.tools.set(fullName, tool.name);
-          const { $schema: _s, ...schema } = (tool.inputSchema ?? { type: 'object', properties: {} }) as Record<string, unknown>;
-          list.push({ type: 'function', function: { name: fullName, description: (tool.description ?? '').slice(0, 1000), parameters: schema } });
-        }
-        appTools.set(handle.server, list);
-      }
+      await Promise.all(
+        handles.map(async (handle) => {
+          if (!handle.listed) {
+            const { tools } = await handle.client.listTools();
+            handle.listed = tools.map((tool) => {
+              const fullName = `mcp__${handle.server}__${tool.name}`.slice(0, 64);
+              handle.tools.set(fullName, tool.name);
+              const { $schema: _s, ...schema } = (tool.inputSchema ?? { type: 'object', properties: {} }) as Record<string, unknown>;
+              return { type: 'function' as const, function: { name: fullName, description: (tool.description ?? '').slice(0, 1000), parameters: schema } };
+            });
+          }
+          appTools.set(handle.server, handle.listed);
+        }),
+      );
       const lazyApps = [...appTools.keys()].filter((app) => req.saver && app !== 'frog');
       const enabled = new Set<string>([...appTools.keys()].filter((app) => !lazyApps.includes(app)));
       // Apps already used earlier in this conversation stay on.
@@ -227,8 +356,10 @@ export class OpenAIRunner implements TurnRunner {
           sink.done({ ok: true, costUsd: 0, tokens });
           return;
         }
-        for (const call of calls) {
-          if (call.name === 'use_app') {
+        // Steps the model asked for together are independent, so they run at the same time.
+        const outputs = await Promise.all(
+          calls.map(async (call) => {
+            if (call.name !== 'use_app') return this.runTool(call, req, sink, handles, client);
             let app = '';
             try {
               app = String(JSON.parse(call.args || '{}').app ?? '');
@@ -242,12 +373,10 @@ export class OpenAIRunner implements TurnRunner {
               ? `${app} is on. Tools: ${appTools.get(app)!.map((t) => (t.type === 'function' ? t.function.name : '')).join(', ')}`
               : `Unknown app "${app}"`;
             sink.toolResult(call.id, note, !known);
-            history.push({ role: 'tool', tool_call_id: call.id, content: note });
-            continue;
-          }
-          const output = await this.runTool(call, req, sink, handles);
-          history.push({ role: 'tool', tool_call_id: call.id, content: output.slice(0, TOOL_OUTPUT_LIMIT) });
-        }
+            return note;
+          }),
+        );
+        calls.forEach((call, i) => history.push({ role: 'tool', tool_call_id: call.id, content: outputs[i].slice(0, TOOL_OUTPUT_LIMIT) }));
         this.save(sessionFile, history);
       }
       this.save(sessionFile, history);
@@ -257,7 +386,8 @@ export class OpenAIRunner implements TurnRunner {
       const aborted = req.abort.signal.aborted;
       sink.done({ ok: false, costUsd: 0, error: aborted ? 'Stopped' : friendlyError(err) });
     } finally {
-      await Promise.all(handles.map((h) => h.client.close().catch(() => undefined)));
+      // Kept-open connections stay up for the next message; only per-turn ones close.
+      await Promise.all(perTurn.map((h) => h.client.close().catch(() => undefined)));
     }
   }
 
@@ -282,7 +412,7 @@ export class OpenAIRunner implements TurnRunner {
     }
   }
 
-  private async runTool(call: { id: string; name: string; args: string }, req: TurnRequest, sink: TurnSink, handles: McpHandle[]) {
+  private async runTool(call: { id: string; name: string; args: string }, req: TurnRequest, sink: TurnSink, handles: McpHandle[], client: OpenAI) {
     let input: Record<string, unknown>;
     try {
       const parsed = call.args ? JSON.parse(call.args) : {};
@@ -309,7 +439,8 @@ export class OpenAIRunner implements TurnRunner {
     try {
       let text: string;
       let image: string | undefined;
-      if (local) text = await runLocalTool(call.name, input, req);
+      if (call.name === 'web_search') text = await this.webSearch(client, String(input.query ?? ''), req.abort.signal);
+      else if (local) text = await runLocalTool(call.name, input, req);
       else if (handle) ({ text, image } = await callMcp(handle, handle.tools.get(call.name)!, input));
       else text = `Unknown tool ${call.name}`;
       sink.toolResult(call.id, text, false, image);
@@ -381,6 +512,7 @@ function baseSystemPrompt(req: TurnRequest) {
   return `You are an autonomous AI agent working on the user's own computer through tools.
 Today is ${new Date().toDateString()}. OS: ${os.type()} ${os.release()}. Your working folder: ${req.cwd}. Shared folder: ${req.additionalDirectories.join(', ')}.
 Use tools to actually do the work instead of describing what you would do. Read before you edit. Prefer your own folder for working files.
+Work fast: use web_search first for anything you need to find (one step gives an answer with sources), fetch_url for a known page or API, and the browser only when a site has no other way in. When several steps do not depend on each other, request them together in one go; they run at the same time.
 If an action is refused, do not retry it another way; explain and ask. Keep answers short and clear, and say what you did.`;
 }
 
