@@ -123,7 +123,7 @@ function parse<T>(raw: string | undefined): T | undefined {
 }
 
 /**
- * Signs in to remote MCP servers that use OAuth (like the ROS dashboard).
+ * Signs in to remote MCP servers that use OAuth (like Notion, Linear or Slack).
  * The first time, it opens the user's browser on the server's sign-in page and
  * catches the redirect on a local port. After that it refreshes tokens on its
  * own, so the integration stays connected.

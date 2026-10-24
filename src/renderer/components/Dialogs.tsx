@@ -9,7 +9,7 @@ const COLORS = ['#3ddc84', '#ff5a5f', '#ffb74d', '#4fc3f7', '#ba68c8', '#f06292'
 const ROLE_IDEAS = [
   { name: 'Researcher', label: 'Finds and checks information', instructions: 'Research topics thoroughly on the web and in our files. Cite sources. Save findings to the shared folder.' },
   { name: 'Writer', label: 'Drafts posts, emails and docs', instructions: 'Write clear drafts in the house voice. Save drafts to the shared folder and ask before anything is published or sent.' },
-  { name: 'Reddit Strategist', label: 'Plans and tracks Reddit work in ROS', instructions: 'Use the ROS dashboard to review projects, subreddits and actions. Propose posts and comments, add them to ROS as pending, and ask before anything goes live.' },
+  { name: 'Transcriber', label: 'Turns videos and audio into text', instructions: 'Get transcripts fast: use youtube_transcript for YouTube links first, and only open the browser if that fails. Save transcripts to the shared folder.' },
 ];
 
 export function AgentDialog() {

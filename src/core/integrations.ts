@@ -32,10 +32,8 @@ export interface NodeRuntime {
   browserArgs?: string[];
 }
 
-const OAUTH_SCOPES: Record<string, string> = {
-  // The ROS dashboard only hands out refresh tokens for offline_access.
-  ros: 'openid profile email offline_access',
-};
+/** Default OAuth scopes for servers that need them (templates can set their own). */
+const OAUTH_SCOPES: Record<string, string> = {};
 
 const requireHere = createRequire(import.meta.url);
 

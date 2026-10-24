@@ -118,7 +118,8 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
 
     const snapshot = engine.snapshot();
     check('Default agent "Frog" exists', snapshot.agents.some((a) => a.name === 'Frog'));
-    check('ROS integration is built in', snapshot.integrations.some((i) => i.id === 'ros' && i.builtin));
+    check('No private integrations are built in', !snapshot.integrations.some((i) => i.id === 'ros'));
+    check('Browser integration is built in', snapshot.integrations.some((i) => i.id === 'browser' && i.builtin));
     check('Sidebar lists Frog', await waitFor(`[...document.querySelectorAll('[data-testid="conversation-item"]')].some(e => e.textContent.includes('Frog'))`));
     await shot('02-home');
 
@@ -228,10 +229,10 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     check('Agent panel closes', await waitFor(`!document.querySelector('[data-testid="panel"]')`));
 
     // Integrations sheet.
-    await caption("Checking Integrations (ROS and the browser)");
+    await caption("Checking Integrations (the browser and app templates)");
     await click('[data-testid="open-integrations"]');
     check('Integrations sheet opens', await waitFor(`document.querySelector('[data-testid="integrations-sheet"]')`));
-    check('ROS card shown', await waitFor(`document.querySelector('[data-integration-id="ros"]')`));
+    check('Browser card shown', await waitFor(`document.querySelector('[data-integration-id="browser"]')`));
     await sleep(500);
     await shot('07-integrations');
     await click('[data-testid="template-custom-http"]');

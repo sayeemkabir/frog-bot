@@ -377,4 +377,19 @@ describe('modes, waiting and group hand-offs', () => {
     expect(decisions).toEqual(['allow', 'deny']);
     await expect(engine.setMode(frogThread().id, 'each')).rejects.toThrow();
   });
+
+  it('a hand-off started in an Auto chat stays Auto for the teammate', async () => {
+    const { conversation: dogThread } = engine.createAgent({ name: 'Dog' });
+    await engine.setMode(frogThread().id, 'auto');
+    const decisions: string[] = [];
+    runner.scripts.set('Frog', async (_r, sink, tool) => sink.textDone(await tool('message_agent', { to: 'Dog', message: 'run ls' })));
+    runner.scripts.set('Dog', async (req, sink) => {
+      decisions.push((await req.canUseTool('Bash', { command: 'ls' }, { signal: req.abort.signal } as never))!.behavior);
+      sink.textDone('done');
+    });
+    await engine.sendMessage(frogThread().id, 'get Dog to list files');
+    await engine.idle();
+    expect(decisions).toEqual(['allow']);
+    expect(engine.messages(dogThread.id).some((m) => m.kind === 'approval')).toBe(false);
+  });
 });

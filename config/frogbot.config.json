@@ -21,17 +21,6 @@
   ],
   "integrations": [
     {
-      "id": "ros",
-      "name": "ROS Dashboard",
-      "description": "RankersFly Reddit operations: projects, accounts, subreddits, post and comment actions.",
-      "icon": "🚀",
-      "transport": "http",
-      "url": "https://dashboard.rankersfly.com/api/mcp",
-      "auth": "oauth",
-      "builtin": true,
-      "autoConnect": true
-    },
-    {
       "id": "browser",
       "name": "Browser (Chromium)",
       "description": "Each agent drives its own Chrome profile on this computer: open sites, click, type, read pages.",

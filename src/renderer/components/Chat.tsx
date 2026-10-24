@@ -9,7 +9,7 @@ const NO_REPLY = /^\(?\s*no reply\s*\)?\.?$/i;
 
 const SUGGESTIONS = [
   'What can you do for me?',
-  'Check my ROS dashboard and tell me what needs attention today',
+  'Find a YouTube video on making an omelette and give me the recipe from it',
   'Read the files in the shared folder and summarize them',
   'Make a plan for this week and split it across the team',
 ];

@@ -80,7 +80,7 @@ interface StoredSettings {
 type TurnOrigin =
   | { kind: 'user' }
   | { kind: 'group' }
-  | { kind: 'relay'; fromAgentId: ID; depth: number }
+  | { kind: 'relay'; fromAgentId: ID; depth: number; mode?: Mode }
   | { kind: 'scheduled'; taskId: ID };
 
 interface QueuedTurn {
@@ -701,14 +701,14 @@ export class FrogEngine {
         memory: tailFile(this.paths.agentMemoryFile(agent.folder), saver ? 3000 : 8000),
         teamMemory: tailFile(this.paths.teamMemoryFile, saver ? 2000 : 6000),
         platform: this.host.platform,
-        mode: this.modeFor(agent, conversation),
+        mode: this.modeFor(agent, conversation, origin),
       });
       const depth = origin.kind === 'relay' ? origin.depth : 0;
       const servers = await this.integrations.serversFor(agent.integrations, {
         slug: agent.folder,
         browserProfile: this.paths.agentBrowserProfile(agent.folder),
       });
-      const mcpServers = { ...servers, frog: createTeamServer(this.teamBridge(agent, conversationId, depth, abort.signal)) };
+      const mcpServers = { ...servers, frog: createTeamServer(this.teamBridge(agent, conversationId, depth, abort.signal, this.modeFor(agent, conversation, origin))) };
 
       const runner = this.customRunner ?? (provider === 'openai' ? this.openaiRunner : this.claudeRunner);
       const resume = conversation.sessions[sessionKey];
@@ -723,8 +723,8 @@ export class FrogEngine {
           sessionId: resume,
           systemPromptAppend: persona,
           mcpServers,
-          canUseTool: this.permissionGate(agent, conversationId, abort.signal),
-          fast: this.modeFor(agent, conversation) === 'auto',
+          canUseTool: this.permissionGate(agent, conversationId, abort.signal, origin),
+          fast: this.modeFor(agent, conversation, origin) === 'auto',
           saver,
           abort,
         },
@@ -774,8 +774,13 @@ export class FrogEngine {
     });
   }
 
-  /** The mode an agent works in inside a chat: the group's mode, or the agent's own. */
-  modeFor(agent: Agent, conversation?: Conversation): Mode {
+  /**
+   * The mode an agent works in: a hand-off keeps the mode of the chat the work
+   * started in (so an Auto job stays Auto across teammates); otherwise the
+   * group's mode, or the agent's own.
+   */
+  modeFor(agent: Agent, conversation?: Conversation, origin?: TurnOrigin): Mode {
+    if (origin?.kind === 'relay' && origin.mode) return origin.mode;
     if (conversation?.kind === 'group' && conversation.mode && conversation.mode !== 'each') return conversation.mode;
     return agent.autonomy ?? 'ask';
   }
@@ -797,11 +802,11 @@ export class FrogEngine {
     this.log.info(`chat:${conversation.title}`, `Mode set to ${mode}`);
   }
 
-  private permissionGate(agent: Agent, conversationId: ID, signal: AbortSignal): CanUseTool {
+  private permissionGate(agent: Agent, conversationId: ID, signal: AbortSignal, origin?: TurnOrigin): CanUseTool {
     return async (toolName, input) => {
       const current = this.agent(agent.id) ?? agent;
       // Read the mode on every call, so switching modes takes effect mid-task.
-      const mode = this.modeFor(current, this.conversation(conversationId));
+      const mode = this.modeFor(current, this.conversation(conversationId), origin);
       const source = `agent:${current.name}`;
       if (mode === 'plan' && !isReadOnlyCall(toolName, input)) {
         this.log.info(source, `Plan mode: held back ${toolName}`);
@@ -894,7 +899,7 @@ export class FrogEngine {
 
   // ───────────────────────── team tools ─────────────────────────
 
-  private teamBridge(agent: Agent, conversationId: ID, depth: number, signal: AbortSignal): TeamBridge {
+  private teamBridge(agent: Agent, conversationId: ID, depth: number, signal: AbortSignal, mode: Mode): TeamBridge {
     const source = `agent:${agent.name}`;
     let sentThisTurn = 0;
     return {
@@ -933,7 +938,7 @@ export class FrogEngine {
             destination.seen[target.id] = Math.max(destination.seen[target.id] ?? 0, Date.now());
           });
         }
-        this.enqueueTurn(target.id, destination.id, { kind: 'relay', fromAgentId: agent.id, depth: depth + 1 }, () => prompt);
+        this.enqueueTurn(target.id, destination.id, { kind: 'relay', fromAgentId: agent.id, depth: depth + 1, mode }, () => prompt);
         return inGroup
           ? `Delivered to ${target.name} here in the group. Their answer will appear in this chat.`
           : `Delivered to ${target.name}. They will work on it in their own chat and can message you back.`;

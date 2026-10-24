@@ -223,7 +223,7 @@ export function classifyTool(toolName: string, rawInput: unknown, ctx: Permissio
       case 'read':
         return allow('reads from a connected app');
       case 'outbound':
-        return ask('sends or publishes something on your behalf', true);
+        return ctx.autonomy === 'auto' ? allow('autonomous mode: sends or publishes', true) : ask('sends or publishes something on your behalf', true);
       case 'delete':
         return ask('deletes or removes data');
       case 'mutate':

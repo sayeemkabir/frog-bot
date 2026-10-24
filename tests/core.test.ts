@@ -42,18 +42,22 @@ describe('permissions', () => {
     expect(classifyTool('PowerShell', { command: 'Remove-Item C:\\x -Recurse' }, ctx({ autonomy: 'auto' })).decision).toBe('ask');
   });
 
-  it('reads ROS freely but asks before changing it', () => {
-    expect(classifyTool('mcp__ros__list_projects', {}, ctx()).decision).toBe('allow');
-    expect(classifyTool('mcp__ros__list_comment_actions', {}, ctx()).decision).toBe('allow');
-    expect(classifyTool('mcp__ros__get_validation_context', {}, ctx()).decision).toBe('allow');
-    expect(classifyTool('mcp__ros__create_post_action', {}, ctx()).decision).toBe('ask');
-    expect(classifyTool('mcp__ros__delete_action', {}, ctx({ autonomy: 'auto' })).decision).toBe('ask');
+  it('reads connected apps freely but asks before changing them', () => {
+    expect(classifyTool('mcp__crm__list_projects', {}, ctx()).decision).toBe('allow');
+    expect(classifyTool('mcp__crm__list_comment_actions', {}, ctx()).decision).toBe('allow');
+    expect(classifyTool('mcp__crm__get_validation_context', {}, ctx()).decision).toBe('allow');
+    expect(classifyTool('mcp__crm__create_post_action', {}, ctx()).decision).toBe('ask');
+    expect(classifyTool('mcp__crm__delete_action', {}, ctx({ autonomy: 'auto' })).decision).toBe('ask');
   });
 
-  it('always asks before sending messages on the user\'s behalf', () => {
-    const verdict = classifyTool('mcp__slack__slack_send_message', { channel: 'x', text: 'hi' }, ctx({ autonomy: 'auto' }));
-    expect(verdict.decision).toBe('ask');
-    expect(verdict.outbound).toBe(true);
+  it('asks before sending messages in Ask mode, but not in Auto', () => {
+    const asked = classifyTool('mcp__slack__slack_send_message', { channel: 'x', text: 'hi' }, ctx());
+    expect(asked.decision).toBe('ask');
+    expect(asked.outbound).toBe(true);
+    expect(classifyTool('mcp__slack__slack_send_message', { channel: 'x', text: 'hi' }, ctx({ autonomy: 'auto' })).decision).toBe('allow');
+    // Auto still stops for things that wipe data.
+    expect(classifyTool('mcp__crm__delete_contact', {}, ctx({ autonomy: 'auto' })).decision).toBe('ask');
+    expect(classifyTool('Bash', { command: 'rm -rf /' }, ctx({ autonomy: 'auto' })).decision).toBe('ask');
   });
 
   it('respects "always allow"', () => {
