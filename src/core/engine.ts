@@ -30,7 +30,7 @@ import { classifyTool, describeToolCall, isReadOnlyCall } from './permissions';
 import { buildPersona, tailFile } from './persona';
 import { ClaudeRunner, type TurnRunner, type TurnSink } from './runner';
 import { OPENAI_MODEL_PREFERENCE, OpenAIRunner } from './openaiRunner';
-import { openProfileWindow } from './agentBrowser';
+import { ensureAgentBrowser, openProfileWindow } from './agentBrowser';
 import type { SecretBox } from './secrets';
 import { JsonDoc, acquireLock, newId, onSaveError } from './store';
 
@@ -50,6 +50,8 @@ export interface EngineHost {
   notify(title: string, body: string, conversationId?: string): void;
   nodeRuntime(): NodeRuntime;
   claudeExecutable?(): string | undefined;
+  /** Where Frog Bot keeps its own Chromium for agents when the computer has no browser they can use. */
+  browsersDir?: string;
   setStartAtLogin?(enabled: boolean): void;
   captureScreen?(): Promise<Buffer | null>;
 }
@@ -226,6 +228,12 @@ export class FrogEngine {
     onSaveError((file, err) => this.log.error('storage', `Could not save ${path.basename(file)} (will retry on the next change)`, String(err)));
     this.log.info('app', `Frog Bot started on ${this.host.platform}`, { home: this.paths.root });
     this.recoverInterrupted();
+    if (this.host.browsersDir) {
+      const dir = this.host.browsersDir;
+      ensureAgentBrowser(dir, this.host.nodeRuntime(), (m) => this.log.info('browser', m))
+        .then(() => this.log.debug('browser', 'Agent browser ready'))
+        .catch((err) => this.log.error('browser', 'Could not set up a browser for the agents', String(err)));
+    }
     if (this.agentsDoc.value.length === 0) this.seed();
     // Upgrade Frog to the chief-of-staff role unless the user wrote their own instructions.
     const frog = this.agentsDoc.value.find((a) => a.name === 'Frog' && a.instructions === OLD_FROG_INSTRUCTIONS);
@@ -887,7 +895,7 @@ export class FrogEngine {
     await this.openaiRunner.release(agentId);
     const raw = url?.trim();
     const target = raw ? (/^https?:\/\//i.test(raw) ? raw : `https://${raw}`) : undefined;
-    openProfileWindow(this.paths.agentBrowserProfile(agent.folder), target);
+    openProfileWindow(this.paths.agentBrowserProfile(agent.folder), target, this.host.browsersDir);
     this.log.info(`agent:${agent.name}`, 'Opened the agent browser for you to sign in', target ? new URL(target).host : undefined);
   }
 

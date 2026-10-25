@@ -18,6 +18,7 @@ import {
 } from 'electron';
 import config from '../../config/frogbot.config.json';
 import { FrogEngine, defaultPlatformName, type AppConfig, type EngineHost } from '../core/engine';
+import { browserLaunchArgs } from '../core/agentBrowser';
 import { AccountManager, MemoryAuth, SupabaseAuth } from '../core/auth';
 import { FrogPaths } from '../core/paths';
 import { FileSecretBox } from '../core/secrets';
@@ -91,6 +92,9 @@ function showWindow(conversationId?: string) {
   if (conversationId) mainWindow!.webContents.send('frog:focus-conversation', conversationId);
 }
 
+/** Shared by every account on this computer: FrogsWorld/browsers. */
+const browsersDir = smokeDir ? undefined : path.join(new FrogPaths().root, 'browsers');
+
 const host: EngineHost = {
   platform: defaultPlatformName(),
   openExternal: (url) => shell.openExternal(url),
@@ -105,7 +109,13 @@ const host: EngineHost = {
     notification.on('click', () => showWindow(conversationId));
     notification.show();
   },
-  nodeRuntime: () => ({ command: process.execPath, env: { ELECTRON_RUN_AS_NODE: '1' } }),
+  nodeRuntime: () => ({
+    command: process.execPath,
+    env: { ELECTRON_RUN_AS_NODE: '1' },
+    browserArgs: browsersDir ? browserLaunchArgs(browsersDir) : undefined,
+  }),
+  // The self-test never downloads a browser.
+  browsersDir,
   claudeExecutable,
   setStartAtLogin: (enabled) => app.setLoginItemSettings({ openAtLogin: enabled, args: ['--hidden'] }),
   captureScreen: async () => {
