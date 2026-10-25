@@ -41,12 +41,12 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: (status: AuthStatus) =>
           {signUp && (
             <label className="field">
               <span>Your name</span>
-              <input className="input" autoFocus autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} data-testid="auth-name" />
+              <input className="input" autoFocus autoComplete="name" value={name} onChange={(e) => { setName(e.target.value); setError(''); }} data-testid="auth-name" />
             </label>
           )}
           <label className="field">
             <span>Email</span>
-            <input className="input" type="email" autoFocus={!signUp} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="auth-email" />
+            <input className="input" type="email" autoFocus={!signUp} autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); setError(''); }} data-testid="auth-email" />
           </label>
           <label className="field">
             <span>Password</span>
@@ -56,7 +56,7 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: (status: AuthStatus) =>
               autoComplete={signUp ? 'new-password' : 'current-password'}
               placeholder={signUp ? 'At least 6 characters' : ''}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => { setPassword(e.target.value); setError(''); }}
               data-testid="auth-password"
             />
           </label>

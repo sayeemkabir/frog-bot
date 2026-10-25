@@ -254,3 +254,32 @@ export class AccountManager {
     fs.rmSync(this.sessionFile, { force: true });
   }
 }
+
+/** A sign-in service that lives in memory: for the self-test, so it never touches the real one. */
+export class MemoryAuth implements AuthBackend {
+  private users = new Map<string, { id: string; password: string; name: string }>();
+
+  private session(email: string): AccountSession {
+    const u = this.users.get(email)!;
+    return { user: { id: u.id, email, name: u.name }, accessToken: `access-${u.id}`, refreshToken: `${email}`, expiresAt: Date.now() + 3600_000 };
+  }
+
+  async signUp(email: string, password: string, name: string) {
+    if (this.users.has(email)) throw new Error('There is already an account with this email. Sign in instead.');
+    this.users.set(email, { id: `test-user-${this.users.size + 1}`, password, name });
+    return this.session(email);
+  }
+
+  async signIn(email: string, password: string) {
+    if (this.users.get(email)?.password !== password) throw new Error('That email and password do not match an account.');
+    return this.session(email);
+  }
+
+  async refresh(refreshToken: string) {
+    if (!this.users.has(refreshToken)) throw new Error('Invalid refresh token');
+    return this.session(refreshToken);
+  }
+
+  async signOut() {}
+  async updateName() {}
+}

@@ -4,7 +4,8 @@ import type { BrowserWindow } from 'electron';
 import type { FrogEngine } from '../core/engine';
 
 interface SmokeContext {
-  engine: FrogEngine;
+  /** The running team (it only exists once someone is signed in). */
+  engine: () => FrogEngine;
   window: BrowserWindow;
   outDir: string;
 }
@@ -22,12 +23,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * clicks through every screen, saves a screenshot of each, and writes
  * results.json. Exit code 0 means every check passed.
  */
-export async function runSmoke({ engine, window, outDir }: SmokeContext): Promise<number> {
+export async function runSmoke({ engine: getEngine, window, outDir }: SmokeContext): Promise<number> {
   fs.mkdirSync(outDir, { recursive: true });
   const checks: Check[] = [];
+  let engine!: FrogEngine;
   const check = (name: string, ok: boolean, detail?: string) => {
     checks.push({ name, ok, detail });
-    engine.log.info('smoke', `${ok ? 'PASS' : 'FAIL'} ${name}`, detail);
+    engine?.log.info('smoke', `${ok ? 'PASS' : 'FAIL'} ${name}`, detail);
   };
   const js = <T>(code: string) => window.webContents.executeJavaScript(code, true) as Promise<T>;
   const waitFor = async (code: string, timeoutMs = 15000) => {
@@ -110,7 +112,23 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
       window.showInactive();
     }
 
+    // FROG_SMOKE_AUTH: start signed out and create an account through the real screen.
+    if (process.env.FROG_SMOKE_AUTH) {
+      check('Sign-in screen shows when signed out', await waitFor(`document.querySelector('[data-testid="auth-screen"]')`, 20000));
+      await click('[data-testid="auth-to-sign-up"]');
+      await typeInto('[data-testid="auth-name"]', 'Sam Rivera');
+      await typeInto('[data-testid="auth-email"]', 'sam@example.com');
+      await typeInto('[data-testid="auth-password"]', '12345');
+      await click('[data-testid="auth-submit"]');
+      check('Password under 6 characters is refused', await waitFor(`document.querySelector('[data-testid="auth-error"]')?.textContent.includes('6 characters')`, 5000));
+      await typeInto('[data-testid="auth-password"]', 'frog-123');
+      await sleep(200);
+      await shot('00-sign-up');
+      await click('[data-testid="auth-submit"]');
+    }
+
     check('UI loads', await waitFor(`document.querySelector('[data-testid="app-ready"]')`, 20000));
+    engine = getEngine();
     if (!process.env.FROG_SMOKE_LIVE) check('Onboarding shows when there is no API key', await waitFor(`document.querySelector('[data-testid="onboarding"]')`, 5000));
     await shot('01-onboarding');
     await click('[data-testid="onboarding-skip"]');
@@ -323,6 +341,15 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
     check('Log file written', fs.readdirSync(engine.paths.logsDir).some((f) => f.endsWith('.log')));
     engine.flush();
     check('State saved', fs.existsSync(path.join(engine.paths.stateDir, 'agents.json')));
+
+    if (process.env.FROG_SMOKE_AUTH) {
+      check('Team lives in the account folder', engine.paths.root.includes(`${path.sep}accounts${path.sep}`));
+      await click('[data-testid="open-profile"]');
+      check('Profile opens from the sidebar', await waitFor(`document.querySelector('[data-testid="profile-sheet"]')`, 5000));
+      await shot('00b-profile');
+      await click('[data-testid="sign-out"]');
+      check('Sign out returns to the sign-in screen', await waitFor(`document.querySelector('[data-testid="auth-screen"]')`, 15000));
+    }
   } catch (err) {
     check('Smoke run finished without crashing', false, err instanceof Error ? err.stack : String(err));
   }

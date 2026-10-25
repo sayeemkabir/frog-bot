@@ -18,7 +18,7 @@ import {
 } from 'electron';
 import config from '../../config/frogbot.config.json';
 import { FrogEngine, defaultPlatformName, type AppConfig, type EngineHost } from '../core/engine';
-import { AccountManager, SupabaseAuth } from '../core/auth';
+import { AccountManager, MemoryAuth, SupabaseAuth } from '../core/auth';
 import { FrogPaths } from '../core/paths';
 import { FileSecretBox } from '../core/secrets';
 import { AUTH_API_METHODS, FROG_API_METHODS, type AuthApi, type FrogApi } from '../shared/types';
@@ -122,13 +122,18 @@ const host: EngineHost = {
 // The self-test uses a throwaway folder; skip the keychain so it can never prompt.
 const encryptionAvailable = () => !smokeDir && safeStorage.isEncryptionAvailable();
 
-/** Accounts are on when the app ships with a sign-in service (never in the self-test). */
+/**
+ * Accounts are on when the app ships with a sign-in service. The self-test never
+ * uses the real one: FROG_SMOKE_AUTH gives it a sign-in service in memory.
+ */
 function createAccounts() {
   const base = new FrogPaths(smokeDir ? path.join(smokeDir, 'FrogsWorld') : undefined).root;
   const settings = (config as { accounts?: { supabaseUrl?: string; supabaseAnonKey?: string } }).accounts ?? {};
   const supabaseUrl = process.env.FROG_SUPABASE_URL || settings.supabaseUrl || '';
   const supabaseAnonKey = process.env.FROG_SUPABASE_ANON_KEY || settings.supabaseAnonKey || '';
-  const backend = !smokeDir && supabaseUrl && supabaseAnonKey ? new SupabaseAuth({ supabaseUrl, supabaseAnonKey }) : null;
+  const backend = smokeDir
+    ? process.env.FROG_SMOKE_AUTH ? new MemoryAuth() : null
+    : supabaseUrl && supabaseAnonKey ? new SupabaseAuth({ supabaseUrl, supabaseAnonKey }) : null;
   return new AccountManager(base, backend, {
     seal: (plain) => (encryptionAvailable() ? 'enc:' + safeStorage.encryptString(plain).toString('base64') : plain),
     open: (sealed) => (sealed.startsWith('enc:') ? safeStorage.decryptString(Buffer.from(sealed.slice(4), 'base64')) : sealed),
@@ -388,7 +393,7 @@ app.whenReady().then(async () => {
   if (!smokeDir) createTray();
 
   if (smokeDir) {
-    const code = await runSmoke({ engine: team(), window: mainWindow!, outDir: smokeDir });
+    const code = await runSmoke({ engine: team, window: mainWindow!, outDir: smokeDir });
     quitting = true;
     app.exit(code);
   }
