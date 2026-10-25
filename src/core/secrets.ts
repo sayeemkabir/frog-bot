@@ -6,6 +6,8 @@ export interface SecretBox {
   get(key: string): string | undefined;
   set(key: string, value: string): void;
   delete(key: string): void;
+  /** Names of everything saved (never the values). */
+  keys(): string[];
 }
 
 /**
@@ -45,6 +47,10 @@ export class FileSecretBox implements SecretBox {
     this.save();
   }
 
+  keys() {
+    return Object.keys(this.data);
+  }
+
   private save() {
     writeFileAtomic(this.file, JSON.stringify(this.data, null, 2));
     try {
@@ -61,4 +67,5 @@ export class MemorySecretBox implements SecretBox {
   get(key: string) { return this.data.get(key); }
   set(key: string, value: string) { this.data.set(key, value); }
   delete(key: string) { this.data.delete(key); }
+  keys() { return [...this.data.keys()]; }
 }

@@ -109,7 +109,19 @@ const OLD_FROG_INSTRUCTIONS = "You are the lead agent. Take the user's requests,
 /** How many @mention hand-offs a group discussion may chain before it pauses for the user. */
 const MAX_GROUP_DEPTH = 12;
 /** A message that only says thanks / got it, with no question and no new work. */
-const ACKNOWLEDGEMENT = /^(thanks|thank you|thx|ty|got it|received|noted|great|perfect|awesome|ok(ay)?|sounds good|will do|understood|cheers|appreciate it|much appreciated)\b[^?]{0,100}$/i;
+const ACKNOWLEDGEMENT = /^(thanks|thank you|thx|ty|got it|received|noted|great|perfect|awesome|ok(ay)?|sounds good|will do|understood|cheers|appreciate it|much appreciated)\b[^?]{0,300}$/i;
+/** Words that turn a "thanks ..." into a real request, so it must still be answered. */
+const REQUEST_CUE = /\b(please|pls|can you|could you|would you|will you|need you|need to|next|now|also|then|go ahead|todo|make sure|don'?t forget)\b/i;
+
+/**
+ * True for a message that only says thanks / got it, even with a short note
+ * after it ("thanks, received. The file is saved at X"). Leading @mentions are
+ * ignored. A question or a request in it means it is not an acknowledgement.
+ */
+export function isAcknowledgement(text: string): boolean {
+  const body = text.trim().replace(/^(@\S+[\s,:-]*)+/, '').trim();
+  return ACKNOWLEDGEMENT.test(body) && !REQUEST_CUE.test(body);
+}
 const ACTIVITY_LIMIT = 150;
 const NO_REPLY = /^\(?\s*no reply\s*\)?\.?$/i;
 const AGENT_COLORS = ['#3f9d6e', '#5b7fc9', '#8a6fc4', '#c48a4f', '#c45f6f', '#4a9aa5', '#8f9a4a', '#6b7280'];
@@ -522,10 +534,36 @@ export class FrogEngine {
     }
     const members = this.agentsDoc.value.filter((a) => conversation.memberIds.includes(a.id));
     const mentioned = findMentions(body, members);
-    const targets = mentioned.length ? mentioned : members.map((a) => a.id);
+    // No @mention: one agent owns the message (it can hand parts to teammates
+    // with @Name), so nobody repeats the same work.
+    const owner = mentioned.length ? null : this.groupOwner(members, conversationId);
+    const targets = owner ? [owner] : mentioned;
     for (const agentId of targets) {
       this.enqueueTurn(agentId, conversationId, { kind: 'group' }, () => this.groupPrompt(agentId, conversationId));
     }
+  }
+
+  /**
+   * Who answers a group message that names nobody: Frog (chief of staff) if
+   * it is in the group, else whoever was addressed or spoke last, else the first member.
+   */
+  private groupOwner(members: Agent[], conversationId: ID): ID | null {
+    if (!members.length) return null;
+    const frog = members.find((a) => a.name === 'Frog');
+    if (frog) return frog.id;
+    const list = this.messages(conversationId);
+    // The newest message is the one the user just sent, so look before it.
+    for (let i = list.length - 2; i >= 0; i--) {
+      const author = list[i].author;
+      if (author.kind === 'agent') {
+        const speaker = author.agentId;
+        if (members.some((a) => a.id === speaker)) return speaker;
+      } else if (author.kind === 'user') {
+        const addressed = findMentions(list[i].text, members)[0];
+        if (addressed) return addressed;
+      }
+    }
+    return members[0].id;
   }
 
   /**
@@ -539,6 +577,11 @@ export class FrogEngine {
     const members = this.agentsDoc.value.filter((a) => group.memberIds.includes(a.id) && a.id !== from.id);
     const mentioned = findMentions(text, members);
     if (!mentioned.length) return;
+    if (isAcknowledgement(text)) {
+      // A "thanks, received" would wake the teammate for nothing.
+      this.log.debug(`agent:${from.name}`, 'Skipped an acknowledgement hand-off in the group');
+      return;
+    }
     if (depth >= MAX_GROUP_DEPTH) {
       this.log.warn(`agent:${from.name}`, `Group "${group.title}" paused after ${MAX_GROUP_DEPTH} hand-offs`);
       this.addMessage(conversationId, { author: { kind: 'system' }, kind: 'text', text: `The team paused after ${MAX_GROUP_DEPTH} hand-offs. Reply to keep them going.` });
@@ -986,7 +1029,7 @@ export class FrogEngine {
         const target = this.agentByName(to);
         if (!target) return `No agent named "${to}". Team: ${this.agentsDoc.value.map((a) => a.name).join(', ')}`;
         if (target.id === agent.id) return 'That is you. Pick a teammate.';
-        if (ACKNOWLEDGEMENT.test(message.trim())) {
+        if (isAcknowledgement(message)) {
           // A "thanks" would wake the teammate for nothing (and invite a "you're welcome").
           this.log.debug(source, `Skipped an acknowledgement to ${target.name}`);
           return 'Not sent: no need to acknowledge. If the work is done, report the result to whoever asked you and end your turn.';

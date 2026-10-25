@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import config from '../config/frogbot.config.json';
-import { FrogEngine, type AppConfig, type EngineHost } from '../src/core/engine';
+import { FrogEngine, isAcknowledgement, type AppConfig, type EngineHost } from '../src/core/engine';
 import { FrogPaths } from '../src/core/paths';
 import { MemorySecretBox } from '../src/core/secrets';
 import type { TurnRequest, TurnRunner, TurnSink } from '../src/core/runner';
@@ -213,7 +213,7 @@ describe('engine', () => {
     expect(texts(frogThread().id).at(-1)).toContain('Researcher is on the team');
   });
 
-  it('routes group messages to @mentioned agents only, or to everyone', async () => {
+  it('routes group messages to @mentioned agents only, or to one owner', async () => {
     engine.createAgent({ name: 'Docs Guy' });
     const ids = engine.snapshot().agents.map((a) => a.id);
     const group = engine.createGroup('Sam Bots', ids);
@@ -226,7 +226,8 @@ describe('engine', () => {
 
     await engine.sendMessage(group.id, 'everyone check in');
     await engine.idle();
-    expect(runner.prompts.map((p) => p.agent).sort()).toEqual(['Docs Guy', 'Docs Guy', 'Frog']);
+    // Nobody was named, so Frog (the chief of staff) answers alone.
+    expect(runner.prompts.map((p) => p.agent)).toEqual(['Docs Guy', 'Frog']);
     // "(no reply)" is not shown.
     expect(texts(group.id).some((t) => t.includes('no reply'))).toBe(false);
   });
@@ -464,5 +465,72 @@ describe('modes, waiting and group hand-offs', () => {
     await engine.idle();
     expect(runner.prompts.length).toBeLessThanOrEqual(14);
     expect(texts(group.id).at(-1)).toContain('paused');
+  });
+});
+
+describe('group ownership and acknowledgements', () => {
+  it('a message with no @mention runs only Frog when Frog is in the group', async () => {
+    engine.createAgent({ name: 'Jahid' });
+    engine.createAgent({ name: 'Khalid' });
+    const group = engine.createGroup('Crew', engine.snapshot().agents.map((a) => a.id));
+    await engine.sendMessage(group.id, 'bring it to my computer in my downloads folder');
+    await engine.idle();
+    expect(runner.prompts.map((p) => p.agent)).toEqual(['Frog']);
+  });
+
+  it('without Frog, the agent who spoke last owns an unaddressed message', async () => {
+    engine.createAgent({ name: 'Jahid' });
+    engine.createAgent({ name: 'Khalid' });
+    const [jahid, khalid] = ['Jahid', 'Khalid'].map((n) => engine.snapshot().agents.find((a) => a.name === n)!.id);
+    const group = engine.createGroup('Pair', [jahid, khalid]);
+    await engine.sendMessage(group.id, 'first thing');
+    await engine.idle();
+    expect(runner.prompts.map((p) => p.agent)).toEqual(['Jahid']);
+    await engine.sendMessage(group.id, '@Khalid take this one');
+    await engine.idle();
+    await engine.sendMessage(group.id, 'and this too');
+    await engine.idle();
+    expect(runner.prompts.map((p) => p.agent)).toEqual(['Jahid', 'Khalid', 'Khalid']);
+  });
+
+  it('@mentions still go to the named agents', async () => {
+    engine.createAgent({ name: 'Jahid' });
+    engine.createAgent({ name: 'Khalid' });
+    const group = engine.createGroup('Crew', engine.snapshot().agents.map((a) => a.id));
+    await engine.sendMessage(group.id, '@Jahid and @Khalid split this');
+    await engine.idle();
+    expect(runner.prompts.map((p) => p.agent).sort()).toEqual(['Jahid', 'Khalid']);
+  });
+
+  it('the owner can hand work to a teammate with @Name', async () => {
+    engine.createAgent({ name: 'Jahid' });
+    const group = engine.createGroup('Crew', engine.snapshot().agents.map((a) => a.id));
+    runner.scripts.set('Frog', async (_r, sink) => sink.textDone('@Jahid please copy the file'));
+    await engine.sendMessage(group.id, 'get the file to my downloads');
+    await engine.idle();
+    expect(runner.prompts.map((p) => p.agent)).toEqual(['Frog', 'Jahid']);
+  });
+
+  it('a thanks-only hand-off starts no turn, a real request does', async () => {
+    engine.createAgent({ name: 'Jahid' });
+    const group = engine.createGroup('Crew', engine.snapshot().agents.map((a) => a.id));
+    runner.scripts.set('Frog', async (_r, sink) => sink.textDone('@Jahid thanks, received. The file is saved at C:\\Users\\me\\Downloads\\notes.txt'));
+    await engine.sendMessage(group.id, 'wrap it up');
+    await engine.idle();
+    expect(runner.prompts.map((p) => p.agent)).toEqual(['Frog']);
+    runner.scripts.set('Frog', async (_r, sink) => sink.textDone('@Jahid thanks, now please send it to Sam'));
+    await engine.sendMessage(group.id, 'one more');
+    await engine.idle();
+    expect(runner.prompts.map((p) => p.agent)).toEqual(['Frog', 'Frog', 'Jahid']);
+  });
+
+  it('recognises acknowledgements without swallowing requests', () => {
+    expect(isAcknowledgement('thanks')).toBe(true);
+    expect(isAcknowledgement('@Khalid thanks — received. The transcript file is saved at C:\\Users\\me\\Downloads\\t.txt')).toBe(true);
+    expect(isAcknowledgement('Got it, noted.')).toBe(true);
+    expect(isAcknowledgement('thanks, can you also fix the footer')).toBe(false);
+    expect(isAcknowledgement('thanks! what about the logo?')).toBe(false);
+    expect(isAcknowledgement('@Khalid thanks, now please deploy it')).toBe(false);
+    expect(isAcknowledgement('please copy the file')).toBe(false);
   });
 });

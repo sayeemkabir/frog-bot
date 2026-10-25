@@ -39,7 +39,7 @@ export function buildPersona(p: PersonaInput) {
     : '- (nobody else yet)';
   const members = p.team.filter((a) => p.conversation.memberIds.includes(a.id)).map((a) => a.name);
   const where = p.conversation.kind === 'group'
-    ? `You are in the group chat "${p.conversation.title}" with ${members.join(', ')}. Teammates you message from here answer here, in front of the user. Keep replies short, address teammates as @Name, only speak when you add something, and never redo work a teammate already finished in this chat.`
+    ? `You are in the group chat "${p.conversation.title}" with ${members.join(', ')}. Teammates you message from here answer here, in front of the user. Keep replies short, address teammates as @Name, only speak when you add something, and never redo work a teammate already finished in this chat. If a message was not addressed to you, do not repeat work a teammate already did or is doing.`
     : 'You are in your own thread with the user.';
 
   return `

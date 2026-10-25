@@ -60,8 +60,23 @@ export class Integrations {
     private node: () => NodeRuntime,
   ) {
     this.userDoc = new JsonDoc(stateFile, { added: [], disabled: [] });
+    this.forgetRemoved();
     for (const integration of this.list()) {
       this.status.set(integration.id, { id: integration.id, state: this.initialState(integration) });
+    }
+  }
+
+  /** Drop saved sign-ins and settings of apps that are no longer in Frog Bot (for example, removed in an update). */
+  private forgetRemoved() {
+    const known = new Set(this.list().map((i) => i.id));
+    for (const key of this.secrets.keys()) {
+      const id = /^(?:oauth|oauthapp|token):([^:]+)/.exec(key)?.[1];
+      if (id && !known.has(id)) this.secrets.delete(key);
+    }
+    if (this.userDoc.value.disabled.some((id) => !known.has(id))) {
+      this.userDoc.update((doc) => {
+        doc.disabled = doc.disabled.filter((id) => known.has(id));
+      });
     }
   }
 
