@@ -163,7 +163,7 @@ describe('engine', () => {
   it('asks for approval before risky tools, and remembers "always allow"', async () => {
     const decisions: string[] = [];
     runner.scripts.set('Frog', async (req, sink) => {
-      const r = await req.canUseTool('mcp__ros__create_post_action', { title: 'x' }, { signal: req.abort.signal } as never);
+      const r = await req.canUseTool('mcp__crm__create_post_action', { title: 'x' }, { signal: req.abort.signal } as never);
       decisions.push(r!.behavior);
       sink.textDone('done');
     });
@@ -173,7 +173,7 @@ describe('engine', () => {
     await engine.decideApproval(approval.id, 'always');
     await engine.idle();
     expect(decisions).toEqual(['allow']);
-    expect(engine.snapshot().agents[0].alwaysAllow).toContain('mcp__ros__create_post_action');
+    expect(engine.snapshot().agents[0].alwaysAllow).toContain('mcp__crm__create_post_action');
 
     await engine.sendMessage(frogThread().id, 'post another');
     await engine.idle();
@@ -348,14 +348,14 @@ describe('modes, waiting and group hand-offs', () => {
     expect(engine.snapshot().agents[0].autonomy).toBe('plan');
     const results: string[] = [];
     runner.scripts.set('Frog', async (req, sink) => {
-      for (const [tool, input] of [['Read', { file_path: 'notes.md' }], ['Write', { file_path: 'notes.md', content: 'x' }], ['Bash', { command: 'ls' }], ['mcp__ros__list_projects', {}], ['mcp__ros__create_post_action', {}]] as const) {
+      for (const [tool, input] of [['Read', { file_path: 'notes.md' }], ['Write', { file_path: 'notes.md', content: 'x' }], ['Bash', { command: 'ls' }], ['mcp__crm__list_projects', {}], ['mcp__crm__create_post_action', {}]] as const) {
         results.push(`${tool}:${(await req.canUseTool(tool, input as never, { signal: req.abort.signal } as never))!.behavior}`);
       }
       sink.textDone('1. do it');
     });
     await engine.sendMessage(frogThread().id, 'plan it');
     await engine.idle();
-    expect(results).toEqual(['Read:allow', 'Write:deny', 'Bash:deny', 'mcp__ros__list_projects:allow', 'mcp__ros__create_post_action:deny']);
+    expect(results).toEqual(['Read:allow', 'Write:deny', 'Bash:deny', 'mcp__crm__list_projects:allow', 'mcp__crm__create_post_action:deny']);
     expect(engine.messages(frogThread().id).some((m) => m.kind === 'approval')).toBe(false);
   });
 

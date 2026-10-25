@@ -118,7 +118,7 @@ export async function runSmoke({ engine, window, outDir }: SmokeContext): Promis
 
     const snapshot = engine.snapshot();
     check('Default agent "Frog" exists', snapshot.agents.some((a) => a.name === 'Frog'));
-    check('No private integrations are built in', !snapshot.integrations.some((i) => i.id === 'ros'));
+    check('Only the browser is built in', snapshot.integrations.filter((i) => i.builtin).every((i) => i.id === 'browser'));
     check('Browser integration is built in', snapshot.integrations.some((i) => i.id === 'browser' && i.builtin));
     check('Sidebar lists Frog', await waitFor(`[...document.querySelectorAll('[data-testid="conversation-item"]')].some(e => e.textContent.includes('Frog'))`));
     await shot('02-home');

@@ -10,8 +10,8 @@ Updated 25 Oct 2026. Order: finish the current version, then Grok Bot features, 
 - [ ] **frogbot.org email**: Cloudflare Email Routing (rezwan@frogbot.org forwards to Gmail, free) plus the domain added to Resend so the app can send from hello@frogbot.org.
 - [ ] **Welcome email** with a short tutorial, sent through Resend after sign-up.
 - [ ] **Privacy page** on the website (we store name and email for accounts), linked from the sign-up screen.
-- [ ] **Release refresh**: replace the v0.1.0 downloads with the new build (accounts, new UI, speed work, no ROS).
-- [ ] **Website refresh**: new screenshots and setup videos (the current ones show the old UI and ROS).
+- [ ] **Release refresh**: replace the v0.1.0 downloads with the new build (accounts, new UI, speed work, cleaned-up integrations).
+- [ ] **Website refresh**: new screenshots and setup videos (the current ones show the old UI and old integrations).
 - [ ] **README overhaul**: badges, diagrams of how agents work together, screenshots, install steps (installer and terminal), website link.
 
 ## 2. Grok Bot features (from the research in grok-bot-blueprint.md)

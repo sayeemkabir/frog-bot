@@ -18,7 +18,7 @@ const openAiKey = openAiKeyFromEnv();
 const live = process.env.FROG_LIVE === '1' && Boolean(claudeKey || openAiKey);
 
 const SCREENS: Record<string, string> = {
-  '01-onboarding.png': 'Welcome screen on first launch: paste a Claude or OpenAI API key, click Allow for ROS once, then chat with Frog.',
+  '01-onboarding.png': 'Welcome screen on first launch: paste a Claude or OpenAI API key, then chat with Frog.',
   '02-home.png': 'Main window: agents and groups on the left, the chat in the middle, Integrations bar bottom-left, suggestion buttons to start.',
   '03-new-agent.png': 'The + button, New agent: pick a name, emoji and colour, a one-line role, and plain-words instructions.',
   '04-group.png': 'A new agent (Docs Guy) and a group chat (Sam Bots) in the sidebar. In groups, @Name talks to one agent.',
@@ -27,7 +27,7 @@ const SCREENS: Record<string, string> = {
   '05c-approved.png': 'After clicking Allow: "You allowed this", and Frog reports the command output.',
   '06-panel-details.png': 'About Frog panel, Settings tab: name, instructions, "Work on its own" switch, brain, which apps it can use.',
   '06-panel-computer.png': 'About Frog panel, Screen tab: the agent\'s computer, and a live list of every step it takes.',
-  '07-integrations.png': 'Integrations: ROS Dashboard (click Connect, then Allow once) and the Browser, plus Slack, Notion, GitHub, Linear, custom apps.',
+  '07-integrations.png': 'Integrations: the built-in Browser, plus Slack, Notion, GitHub, Linear, custom apps.',
   '08-integration-form.png': 'Adding another app: fill in the server address (and a token if needed), then Add.',
   '09-logs.png': 'Logs tab: a live terminal-style list of everything that happens, with date and time, filters, copy and save.',
   '10-settings.png': 'Settings: API key, team name, brain for new agents, start with the computer, Learn from my screen, where files live.',

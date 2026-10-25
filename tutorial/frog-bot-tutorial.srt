@@ -6,7 +6,7 @@ teammates on your computer.
 2
 00:00:07,628 --> 00:00:19,471
 The first time you open Frog Bot, it asks for an API key from Claude
-or OpenAI. Then you allow the ROS dashboard once, and you can start
+or OpenAI. Then you can start
 chatting with Frog right away.
 
 3
@@ -57,7 +57,7 @@ live steps, so you always know what it is doing.
 11
 00:01:46,038 --> 00:01:58,920
 Integrations connect Frog Bot to the tools you already use. You can
-connect ROS and the browser, and add apps like Slack, Notion, GitHub,
+use the built-in browser, and add apps like Slack, Notion, GitHub,
 Linear, or custom apps.
 
 12

@@ -10,7 +10,7 @@
 
 Frog Bot is a desktop chat app (Windows, macOS, Linux). Inside it you have **agents**: teammates with a name, a job, their own memory and their own folder ("computer"). You chat with them like you would with a colleague.
 
-- **They do real work.** Read and write files, run commands, browse the web in their own Chrome, and use connected apps like the **ROS dashboard** and Slack.
+- **They do real work.** Read and write files, run commands, browse the web in their own Chrome, and use connected apps like Slack, Notion and GitHub.
 - **They work together.** Agents message each other, hand off tasks, and can ask you to add a new specialist when the team needs one. Put several in a **group chat** and use `@Name` to talk to one.
 - **They ask first.** Anything that speaks for you (posting, sending, deleting, changing data in an app) shows an **Allow / Don't allow** card. You can "Always allow" a specific action per agent.
 - **They remember.** Each agent keeps a `memory.md`, and the team shares `team-memory.md`. Optional **Learn from my screen** saves screenshots they can look at to learn how you work.
@@ -28,9 +28,8 @@ Frog Bot is a desktop chat app (Windows, macOS, Linux). Inside it you have **age
 | Linux (64-bit) | In a terminal: `curl -fsSL https://sayeemkabir.github.io/frogbot/install-linux.sh \| bash` |
 
 Then:
-1. Paste an API key: **Claude** (console.anthropic.com, best) or **OpenAI** (platform.openai.com).
-2. Your browser opens the **ROS dashboard** sign-in once. Click **Allow**.
-3. Say hi to **Frog**. Press **+** to add agents or a group.
+1. Create your account (email and password), then paste an API key: **Claude** (console.anthropic.com, best) or **OpenAI** (platform.openai.com).
+2. Say hi to **Frog**. Press **+** to add agents or a group.
 
 That's it. Your key is stored encrypted with your system keychain and never leaves your computer except to talk to the AI provider.
 
@@ -86,11 +85,11 @@ src/
     openaiRunner.ts OpenAI brain (same tools, same approval gate)
     frogTools.ts    team tools: message_agent, ask_user, request_new_agent, remember, schedule_task…
     permissions.ts  what runs freely vs. what needs your OK
-    integrations.ts MCP apps (ROS, browser, Slack…), oauth.ts signs in and refreshes tokens
+    integrations.ts MCP apps (browser, Slack, Notion…), oauth.ts signs in and refreshes tokens
   main/         Electron: window, tray, notifications, encrypted keys, IPC, self-test
   renderer/     React UI
   server/       headless HTTP + WebSocket server using the same engine and UI
-config/frogbot.config.json   built-in integrations (ROS, browser) and templates
+config/frogbot.config.json   built-in browser integration and app templates
 ```
 
 The UI only talks to the engine through one typed API (`src/shared/types.ts → FrogApi`), over Electron IPC on the desktop or a WebSocket on a server.
@@ -102,7 +101,7 @@ FROG_SERVER_TOKEN=<long random string> npm run server
 # open http://<server>:4777/?token=<that string>
 ```
 
-On a server, each agent's browser runs headless in its own Chromium (`npx playwright install chromium` once). OAuth sign-ins (like ROS) are easiest to do once on a desktop first.
+On a server, each agent's browser runs headless in its own Chromium (`npx playwright install chromium` once). OAuth sign-ins (like Slack) are easiest to do once on a desktop first.
 
 ### Adding a built-in integration
 

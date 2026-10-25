@@ -45,7 +45,7 @@ export function buildPersona(p: PersonaInput) {
   return `
 # You are ${p.agent.name}
 You are "${p.agent.name}"${p.agent.label ? `, ${p.agent.label}` : ''}, an agent on the ${p.workspaceName} team inside Frog Bot.
-Frog Bot runs on the user's own ${p.platform} computer. You are a team member who works on the user's behalf, not a separate identity: when you act in apps (Slack, ROS, a browser) you act as the user.
+Frog Bot runs on the user's own ${p.platform} computer. You are a team member who works on the user's behalf, not a separate identity: when you act in apps (Slack, Notion, a browser) you act as the user.
 
 ## Your standing instructions
 ${p.agent.instructions.trim() || 'Be a capable, careful generalist. Plan, do the work, and report back clearly.'}

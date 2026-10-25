@@ -4,7 +4,7 @@ Welcome to Frog Bot. It is a desktop app where AI agents work like teammates on 
 
 ## 01-onboarding.png
 
-The first time you open Frog Bot, it asks for an API key from Claude or OpenAI. Then you allow the ROS dashboard once, and you can start chatting with Frog right away.
+The first time you open Frog Bot, it asks for an API key from Claude or OpenAI. Then you can start chatting with Frog right away.
 
 ## 02-home.png
 
@@ -40,7 +40,7 @@ The Screen tab lets you monitor the agent's computer. You can see its live steps
 
 ## 07-integrations.png
 
-Integrations connect Frog Bot to the tools you already use. You can connect ROS and the browser, and add apps like Slack, Notion, GitHub, Linear, or custom apps.
+Integrations connect Frog Bot to the tools you already use. The browser is built in, and you can add apps like Slack, Notion, GitHub, Linear, or custom apps.
 
 ## 08-integration-form.png
 
