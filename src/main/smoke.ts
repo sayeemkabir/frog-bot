@@ -273,7 +273,16 @@ export async function runSmoke({ engine: getEngine, window, outDir }: SmokeConte
     await click('[data-testid="open-integrations"]');
     await waitFor(`document.querySelector('[data-testid="integrations-sheet"]')`);
     await click('[data-testid="template-slack"]');
-    check('Slack form shows setup steps', await waitFor(`document.querySelector('[data-testid="integration-help"]')?.textContent.includes('api.slack.com/apps')`));
+    check('Slack form shows Create my Slack app button', await waitFor(`document.querySelector('[data-testid="create-app"]')?.textContent.includes('Create my Slack app')`));
+    check(
+      'Slack create button links to a pre-filled app with the redirect',
+      await waitFor(`(() => {
+        const h = document.querySelector('[data-testid="create-app"]')?.getAttribute('href') ?? '';
+        const pre = 'https://api.slack.com/apps?new_app=1&manifest_json=';
+        if (!h.startsWith(pre)) return false;
+        try { return JSON.parse(decodeURIComponent(h.slice(pre.length))).oauth_config.redirect_urls.includes('http://localhost:3119/oauth/callback'); } catch { return false; }
+      })()`)
+    );
     check('Slack form offers the app manifest', await waitFor(`document.querySelector('[data-testid="copy-manifest"]')`));
     await shot('08b-slack-form');
     await click('[data-testid="sheet-close"]');

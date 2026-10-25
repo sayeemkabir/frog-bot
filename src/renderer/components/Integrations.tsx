@@ -123,25 +123,42 @@ function AddForm({ template, onDone }: { template: IntegrationTemplate; onDone: 
       {template.help && (
         <div className="setup-help" data-testid="integration-help">
           <p>{template.help}</p>
-          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-            {template.manifest !== undefined && (
-              <button
-                type="button"
-                className="btn primary"
-                data-testid="copy-manifest"
-                onClick={() =>
-                  navigator.clipboard
-                    .writeText(JSON.stringify(template.manifest, null, 2))
-                    .then(() => toast('Manifest copied', 'Paste it in Slack: Create New App → From a manifest.', 'success'))
-                }
-              >
-                Copy {template.name} app manifest
-              </button>
-            )}
-            {template.id === 'slack' && (
-              <a className="btn" href="https://api.slack.com/apps?new_app=1" target="_blank" rel="noreferrer">Open api.slack.com/apps ↗</a>
-            )}
-          </div>
+          {template.manifest !== undefined && (
+            <ol className="setup-steps">
+              <li>
+                <a
+                  className="btn primary"
+                  data-testid="create-app"
+                  href={`https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(JSON.stringify(template.manifest))}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Create my {template.name} app
+                </a>
+                <span className="muted">{template.name} opens with everything filled in. Pick your workspace, click Next, then Create.</span>
+              </li>
+              <li>
+                <span>Then open Basic Information in {template.name}, copy the Client ID and Client Secret, and paste them below.</span>
+              </li>
+              <li>
+                <span>Press Connect. Your browser opens {template.name}: click Allow.</span>
+              </li>
+            </ol>
+          )}
+          {template.manifest !== undefined && (
+            <button
+              type="button"
+              className="link-btn"
+              data-testid="copy-manifest"
+              onClick={() =>
+                navigator.clipboard
+                  .writeText(JSON.stringify(template.manifest, null, 2))
+                  .then(() => toast('Manifest copied', 'Paste it in Slack: Create New App → From a manifest.', 'success'))
+              }
+            >
+              Copy manifest instead
+            </button>
+          )}
         </div>
       )}
       {(template.fields ?? []).map((field) => (
@@ -163,7 +180,7 @@ function AddForm({ template, onDone }: { template: IntegrationTemplate; onDone: 
           : 'Tokens are stored encrypted on this computer and never leave it except to talk to that app.'}
       </div>
       <div className="actions">
-        <button className="btn primary" disabled={saving}>{saving ? 'Adding…' : `Add ${template.name}`}</button>
+        <button className="btn primary" disabled={saving}>{saving ? 'Connecting…' : template.manifest !== undefined ? 'Connect' : `Add ${template.name}`}</button>
         <button type="button" className="btn ghost" onClick={onDone}>Cancel</button>
       </div>
     </form>
