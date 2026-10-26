@@ -70,7 +70,7 @@ npm run dev               # hot-reloading UI, main process rebuilt on save
 | `npm run smoke -- --runs 3` | Launches the real app, clicks through every screen, saves screenshots to `smoke-output/` |
 | `npm run typecheck` | TypeScript check |
 | `node scripts/package-all.mjs` | Build Windows, Mac and Linux installers into `release/` from this one machine |
-| `node scripts/video/make-setup-videos.mjs tutorial` | Re-make the tutorial and setup videos (Windows voice + ffmpeg) |
+| `npm run build && node scripts/video/make-setup-videos.mjs <folder>` | Re-make the website videos: films the real app (sign-up, key, chat, teamwork) and narrates it (Windows voice + ffmpeg, no AI) |
 | `npm run server` | Headless server mode (see below) |
 
 Installers are published at **github.com/sayeemkabir/frogbot/releases**, and the website lives in that same public repo. `.github/workflows/build.yml` builds on all three systems with GitHub Actions once it is re-enabled.

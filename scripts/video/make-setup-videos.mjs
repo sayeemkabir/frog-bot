@@ -1,8 +1,10 @@
-// Makes the three setup videos (Windows, Mac, Linux): branded slides with real
-// screenshots, narrated by the computer's built-in voice, with subtitles.
-//   node scripts/video/make-setup-videos.mjs <outDir>
-// Needs Windows (for the voice) and ffmpeg on PATH. No AI services are used.
-import { execFileSync } from 'node:child_process';
+// Makes the tutorial and the three setup videos (Windows, Mac, Linux): branded
+// slides plus real recordings of the app being used (src/main/walkthrough.ts),
+// narrated by the computer's built-in voice, with subtitles.
+//   npm run build && node scripts/video/make-setup-videos.mjs <outDir> [usage|windows|mac|linux…]
+// Needs Windows (for the voice) and ffmpeg on PATH. No AI services are used: the
+// recordings run with a test sign-in service and a pretend brain.
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,45 +24,29 @@ const slide = (o) => o;
 const VIDEOS = {
   usage: [
     slide({ kicker: 'Tutorial', title: 'How to use Frog Bot', body: 'Your AI team, on your computer.', say: 'Welcome to Frog Bot. In the next few minutes you will see how to work with your own team of AI agents, right on your computer.' }),
-    slide({ step: 1, title: 'Sign up, then add your key', body: 'Create your account, then paste a Claude or OpenAI API key. It stays encrypted on your computer.', image: '01-onboarding.png', say: 'The first time you open Frog Bot, create your account with your email and a password. Then paste a Claude or OpenAI API key and click Start. It stays encrypted on your own computer.' }),
-    slide({ step: 2, title: 'Chat with Frog', body: 'Frog is your lead agent. Tell it what you need, in plain words.', image: '05-chat.png', say: 'Frog is your lead agent. Just tell it what you need, in plain words, like you would tell a coworker.' }),
-    slide({ step: 3, title: 'Add teammates', body: 'Press <b>+</b>, then <b>New agent</b>. Give it a name, an emoji and a job.', image: '03-new-agent.png', say: 'To add a teammate, press the plus button and choose New agent. Give it a name, pick an emoji, and describe its job.' }),
-    slide({ step: 4, title: 'Put them in a group', body: 'In a group, everyone sees the chat. Type <b>@Name</b> to talk to one agent. Hand-offs happen right there.', image: '12-teamwork.png', say: 'Put agents in a group, and they work together in front of you. Type at, and a name, to talk to one of them. When one agent hands work to another, you see the hand-off right in the chat.' }),
-    slide({ step: 5, title: 'Choose how free they are', body: '<b>✋ Ask first</b>, <b>⚡ Auto</b> or <b>📝 Plan</b>, under the message box. Click it, or press <b>Shift+Tab</b>.', image: '16-plan.png', say: 'Under the message box you choose a mode. Ask first, asks before changing things. Auto, just gets it done. Plan, only makes a plan, and gives you a Run this plan button. Click the mode, or press Shift and Tab to switch.' }),
-    slide({ step: 6, title: 'You stay in control', body: 'Anything that sends, posts or deletes shows <b>Allow</b> / <b>Don\'t allow</b> first.', image: '05b-approval.png', say: 'Anything that sends a message, posts, or deletes, always asks you first. You choose Allow, or Don\'t allow.' }),
-    slide({ step: 7, title: 'Never miss a request', body: 'If an agent needs you in another chat, a bar shows it on top, with the buttons right there.', image: '13-needs-you.png', say: 'If an agent needs you in a different chat, a bar appears at the top of whatever you are looking at, with the buttons right there.' }),
-    slide({ step: 8, title: 'Connect your apps', body: 'Open <b>Integrations</b> (bottom left). The browser is built in. Add Slack, Notion, GitHub and more.', image: '07-integrations.png', say: 'Open Integrations, at the bottom left, to see your connected apps. The browser is built in, and you can add Slack, Notion, GitHub, and more.' }),
-    slide({ step: 9, title: 'See everything that happens', body: 'The <b>Logs</b> tab lists every action with date and time. Settings has <b>Save tokens</b> to spend less.', image: '09-logs.png', say: 'The Logs tab shows everything that happened, with the date and time. And in Settings, Save tokens keeps your AI costs low.' }),
-    slide({ kicker: 'That\'s it', title: 'Give your team its first job', body: 'Frog Bot keeps working from the tray while your computer is on.', say: 'That is all you need. Give your team its first job. Frog Bot keeps working from the tray, as long as your computer is on.' }),
+    { record: 'tour' },
   ],
   windows: [
     slide({ kicker: 'Setup guide', title: 'Install Frog Bot on Windows', body: 'About two minutes, no technical skills needed.', say: 'Here is how to install Frog Bot on Windows. It takes about two minutes, and you do not need any technical skills.' }),
     slide({ step: 1, title: 'Download the installer', body: `Go to <b>${SITE}</b> and click <b>Download for Windows</b>.`, button: 'Download for Windows', say: `Open your browser and go to ${SITE.replace(/\./g, ' dot ').replace(/\//g, ' slash ')}. Click the green Download for Windows button.` }),
     slide({ step: 2, title: 'Run it', body: 'Open <b>FrogBot-Setup-Windows.exe</b>. If Windows shows “Windows protected your PC”, click <b>More info</b>, then <b>Run anyway</b>.', smartscreen: true, say: 'Open the file you downloaded. If Windows says it protected your PC, that is normal for new apps. Click More info, then Run anyway. Frog Bot installs and opens by itself.' }),
-    slide({ step: 3, title: 'Create your account', body: 'Enter your name, email and a password (6 characters or more). Your team is private to your account.', image: '00-sign-up.png', say: 'Frog Bot opens on the sign up screen. Enter your name, your email, and a password of at least six characters. Your team is private to your account.' }),
-    slide({ step: 4, title: 'Paste your API key', body: 'Paste a Claude or OpenAI API key and click <b>Start</b>. It stays encrypted on your computer.', image: '01-onboarding.png', say: 'On the welcome screen, paste your Claude or OpenAI API key and click Start. Your key stays encrypted on your own computer.' }),
-    slide({ step: 5, title: 'Connect your apps', body: 'Open <b>Integrations</b> (bottom left) to add Slack, Notion, GitHub and more. Optional.', image: '07-integrations.png', say: 'If you like, open Integrations at the bottom left to connect apps like Slack, Notion or GitHub.' }),
-    slide({ step: 6, title: 'Chat with Frog', body: 'Tell Frog what you need. Add more agents with the <b>+</b> button.', image: '05-chat.png', say: 'That is it. Chat with Frog like you would with a teammate, and add more agents with the plus button.' }),
+    { record: 'firstrun' },
     slide({ kicker: 'Good to know', title: 'Frog Bot keeps working', body: 'Closing the window keeps it running in the tray. Right-click the tray frog and choose <b>Quit</b> to close it fully.', say: 'One last thing. Closing the window keeps Frog Bot running in the tray, so your agents can keep working. To close it fully, right click the frog in the tray and choose Quit.' }),
   ],
   mac: [
     slide({ kicker: 'Setup guide', title: 'Install Frog Bot on a Mac', body: 'One command does everything. About two minutes.', say: 'Here is how to install Frog Bot on a Mac. One command does everything, and it takes about two minutes.' }),
     slide({ step: 1, title: 'Open Terminal', body: 'Press <b>⌘ Command + Space</b>, type <b>Terminal</b>, and press <b>Enter</b>.', keys: ['⌘', 'Space'], say: 'First, open Terminal. Press Command and Space together, type Terminal, and press Enter.' }),
     slide({ step: 2, title: 'Paste the install command', body: `Copy it from <b>${SITE}</b>, paste it into Terminal, and press <b>Enter</b>.`, code: `curl -fsSL https://${SITE}/install-mac.sh | bash`, say: 'Go to the Frog Bot website and copy the Mac install command. Paste it into Terminal and press Enter. It downloads Frog Bot, puts it in your Applications folder, takes care of Mac security, and opens the app.' }),
-    slide({ step: 3, title: 'Create your account', body: 'Enter your name, email and a password (6 characters or more).', image: '00-sign-up.png', say: 'Frog Bot opens on the sign up screen. Enter your name, your email, and a password of at least six characters.' }),
-    slide({ step: 4, title: 'Paste your API key', body: 'Paste a Claude or OpenAI API key and click <b>Start</b>.', image: '01-onboarding.png', say: 'When Frog Bot opens, paste your Claude or OpenAI API key and click Start.' }),
-    slide({ step: 5, title: 'Connect your apps', body: 'Open <b>Integrations</b> (bottom left) to add Slack, Notion, GitHub and more. Optional.', image: '07-integrations.png', say: 'If you like, open Integrations at the bottom left to connect apps like Slack, Notion or GitHub.' }),
-    slide({ step: 6, title: 'Chat with Frog', body: 'Find Frog Bot in Applications or Launchpad any time.', image: '05-chat.png', say: 'Now chat with Frog. Next time, open Frog Bot from Applications or Launchpad.' }),
+    { record: 'firstrun' },
+    slide({ kicker: 'Good to know', title: 'Open it again later', body: 'Frog Bot is in <b>Applications</b> and <b>Launchpad</b>.', say: 'Next time, open Frog Bot from Applications, or from Launchpad.' }),
     slide({ kicker: 'Good to know', title: 'Downloaded the zip instead?', body: 'Move it to Applications, then run this once in Terminal:', code: 'xattr -cr "/Applications/Frog Bot.app" && codesign --force --deep --sign - "/Applications/Frog Bot.app"', say: 'If you downloaded the zip file instead, move Frog Bot to Applications, and run the command on screen once in Terminal. The install command does this for you.' }),
   ],
   linux: [
     slide({ kicker: 'Setup guide', title: 'Install Frog Bot on Linux', body: 'One command, for 64-bit Linux. About two minutes.', say: 'Here is how to install Frog Bot on Linux. One command does it, on any 64 bit Linux.' }),
     slide({ step: 1, title: 'Open a terminal', body: 'On Ubuntu, press <b>Ctrl + Alt + T</b>.', keys: ['Ctrl', 'Alt', 'T'], say: 'First, open a terminal. On Ubuntu, press Control, Alt and T together.' }),
     slide({ step: 2, title: 'Paste the install command', body: `Copy it from <b>${SITE}</b> and press <b>Enter</b>. It may ask your password once.`, code: `curl -fsSL https://${SITE}/install-linux.sh | bash`, say: 'Go to the Frog Bot website, copy the Linux install command, paste it into the terminal, and press Enter. It may ask for your password once, to set up the browser security sandbox.' }),
-    slide({ step: 3, title: 'Create your account', body: 'Frog Bot opens by itself. Enter your name, email and a password (6 characters or more).', image: '00-sign-up.png', say: 'Frog Bot opens by itself, on the sign up screen. Enter your name, your email, and a password of at least six characters.' }),
-    slide({ step: 4, title: 'Paste your API key', body: 'Paste a Claude or OpenAI API key and click <b>Start</b>.', image: '01-onboarding.png', say: 'Frog Bot opens by itself. Paste your Claude or OpenAI API key and click Start.' }),
-    slide({ step: 5, title: 'Connect your apps', body: 'Open <b>Integrations</b> (bottom left) to add Slack, Notion, GitHub and more. Optional.', image: '07-integrations.png', say: 'If you like, open Integrations at the bottom left to connect apps like Slack, Notion or GitHub.' }),
-    slide({ step: 6, title: 'Chat with Frog', body: 'Open it later from your apps menu, or type <b>frogbot</b> in a terminal.', image: '05-chat.png', say: 'Now chat with Frog. Next time, open Frog Bot from your apps menu, or type frogbot in a terminal.' }),
+    { record: 'firstrun' },
+    slide({ kicker: 'Good to know', title: 'Open it again later', body: 'From your apps menu, or type <b>frogbot</b> in a terminal.', say: 'Next time, open Frog Bot from your apps menu, or type frogbot in a terminal.' }),
   ],
 };
 
@@ -128,40 +114,101 @@ const vttTime = (t) => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${s}`;
 };
 
+const ENCODE = ['-r', '30', '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-ar', '44100', '-ac', '1'];
+
+/** A narrated slide as a clip. */
+function slideClip(s, png, work, i) {
+  const wav = path.join(work, `s${i}.wav`);
+  speak(s.say, wav);
+  const d = duration(wav) + 0.8;
+  const file = path.join(work, `c${i}.mp4`);
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-loop', '1', '-i', png, '-i', wav, '-af', 'apad', '-t', d.toFixed(2),
+    '-vf', 'scale=1920:1080,setsar=1,fps=30', '-tune', 'stillimage', ...ENCODE, file]);
+  return { file, duration: d, cues: [{ start: 0, end: d - 0.4, text: s.say }] };
+}
+
+/**
+ * Films a scene of the real app (src/main/walkthrough.ts) and narrates it. Where
+ * a line takes longer to say than the action on screen, the last frame of that
+ * part is held until the voice catches up.
+ */
+const recordings = new Map();
+function recordedClip(scene, work) {
+  if (recordings.has(scene)) return recordings.get(scene);
+  const dir = path.join(work, `rec-${scene}`);
+  fs.mkdirSync(dir, { recursive: true });
+  console.log(`Filming the app: ${scene}…`);
+  const run = spawnSync(electron, ['.', `--smoke=${dir}`], {
+    cwd: root,
+    stdio: 'ignore',
+    timeout: 10 * 60_000,
+    env: { ...process.env, FROG_SMOKE_AUTH: '1', FROG_SMOKE_DEMO: '1', FROG_WALKTHROUGH: scene, ELECTRON_ENABLE_LOGGING: '0' },
+  });
+  const errFile = path.join(dir, 'error.txt');
+  if (run.status !== 0 || fs.existsSync(errFile)) throw new Error(`Filming ${scene} failed: ${fs.existsSync(errFile) ? fs.readFileSync(errFile, 'utf8') : `exit ${run.status}`}`);
+  const { times, chapters, end } = JSON.parse(fs.readFileSync(path.join(dir, 'timeline.json'), 'utf8'));
+
+  const frameLen = times.map((t, k) => (k + 1 < times.length ? times[k + 1] : end) - t);
+  const cues = [];
+  const audio = [];
+  let at = 0;
+  chapters.forEach((c, i) => {
+    const first = c.frame;
+    const last = (i + 1 < chapters.length ? chapters[i + 1].frame : times.length) - 1;
+    const shown = frameLen.slice(first, last + 1).reduce((a, b) => a + b, 0);
+    const wav = path.join(dir, `${c.id}.wav`);
+    speak(c.say, wav);
+    const said = duration(wav);
+    const len = Math.max(shown, said + 0.7);
+    frameLen[last] += len - shown;
+    const padded = path.join(dir, `${c.id}-pad.wav`);
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', wav, '-af', 'apad', '-t', len.toFixed(3), '-ar', '44100', '-ac', '1', padded]);
+    audio.push(padded);
+    cues.push({ start: at, end: at + said + 0.3, text: c.say });
+    at += len;
+  });
+  const frames = path.join(dir, 'frames.txt');
+  // The film starts at the first chapter, once the app is on screen.
+  const lines = times.map((_, k) => `file 'frames/f${String(k).padStart(5, '0')}.jpg'\nduration ${frameLen[k].toFixed(4)}`).slice(chapters[0].frame);
+  fs.writeFileSync(frames, `${lines.join('\n')}\nfile 'frames/f${String(times.length - 1).padStart(5, '0')}.jpg'\n`);
+  const voice = path.join(dir, 'voice.txt');
+  fs.writeFileSync(voice, audio.map((a) => `file '${a.replace(/\\/g, '/')}'`).join('\n'));
+  const voiceWav = path.join(dir, 'voice.wav');
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', voice, '-c', 'copy', voiceWav]);
+  const file = path.join(dir, 'clip.mp4');
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', frames, '-i', voiceWav,
+    '-vf', 'scale=1920:1080:flags=lanczos,setsar=1,fps=30', '-fps_mode', 'cfr', '-t', at.toFixed(3), ...ENCODE, file], { cwd: dir });
+  const clip = { file, duration: duration(file), cues };
+  recordings.set(scene, clip);
+  return clip;
+}
+
 fs.mkdirSync(outDir, { recursive: true });
 const only = process.argv.slice(3);
-for (const [osName, slides] of Object.entries(VIDEOS)) {
+const work = fs.mkdtempSync(path.join(os.tmpdir(), 'frog-video-'));
+for (const [osName, parts] of Object.entries(VIDEOS)) {
   if (only.length && !only.includes(osName)) continue;
   const label = { usage: 'Tutorial', windows: 'Windows', mac: 'macOS', linux: 'Linux' }[osName];
   const baseName = osName === 'usage' ? 'frog-bot-tutorial' : `setup-${osName}`;
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), `frog-video-${osName}-`));
-  const jobs = slides.map((s, i) => {
-    const html = path.join(work, `s${i}.html`);
-    fs.writeFileSync(html, slideHtml(s, label));
-    return { html, png: path.join(work, `s${i}.png`) };
-  });
-  fs.writeFileSync(path.join(work, 'jobs.json'), JSON.stringify(jobs));
-  execFileSync(electron, [path.join(root, 'scripts', 'video', 'render.cjs'), path.join(work, 'jobs.json')], { stdio: 'inherit' });
+  const slideWork = path.join(work, osName);
+  fs.mkdirSync(slideWork, { recursive: true });
+  const jobs = parts.map((s, i) => (s.record ? null : { html: path.join(slideWork, `s${i}.html`), png: path.join(slideWork, `s${i}.png`) }));
+  parts.forEach((s, i) => jobs[i] && fs.writeFileSync(jobs[i].html, slideHtml(s, label)));
+  fs.writeFileSync(path.join(slideWork, 'jobs.json'), JSON.stringify(jobs.filter(Boolean)));
+  execFileSync(electron, [path.join(root, 'scripts', 'video', 'render.cjs'), path.join(slideWork, 'jobs.json')], { stdio: 'ignore' });
 
-  const clips = [];
+  const clips = parts.map((s, i) => (s.record ? recordedClip(s.record, work) : slideClip(s, jobs[i].png, slideWork, i)));
+  const out = path.join(outDir, `${baseName}.mp4`);
+  const inputs = clips.flatMap((c) => ['-i', c.file]);
+  const joined = clips.map((_, i) => `[${i}:v][${i}:a]`).join('') + `concat=n=${clips.length}:v=1:a=1[v][a]`;
+  execFileSync('ffmpeg', ['-v', 'error', '-y', ...inputs, '-filter_complex', joined, '-map', '[v]', '-map', '[a]', ...ENCODE, '-movflags', '+faststart', out]);
   const cues = [];
   let t = 0;
-  slides.forEach((s, i) => {
-    const wav = path.join(work, `s${i}.wav`);
-    speak(s.say, wav);
-    const d = duration(wav) + 0.8;
-    const clip = path.join(work, `c${i}.mp4`);
-    execFileSync('ffmpeg', ['-v', 'error', '-y', '-loop', '1', '-i', jobs[i].png, '-i', wav, '-af', 'apad', '-t', d.toFixed(2),
-      '-vf', 'fps=30,format=yuv420p', '-c:v', 'libx264', '-tune', 'stillimage', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-ar', '44100', clip]);
-    clips.push(clip);
-    cues.push(`${vttTime(t)} --> ${vttTime(t + d - 0.4)}\n${s.say}`);
-    t += d;
-  });
-  const list = path.join(work, 'list.txt');
-  fs.writeFileSync(list, clips.map((c) => `file '${c.replace(/\\/g, '/')}'`).join('\n'));
-  const out = path.join(outDir, `${baseName}.mp4`);
-  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', out]);
+  for (const c of clips) {
+    for (const cue of c.cues) cues.push(`${vttTime(t + cue.start)} --> ${vttTime(t + cue.end)}\n${cue.text}`);
+    t += c.duration;
+  }
   fs.writeFileSync(path.join(outDir, `${baseName}.vtt`), `WEBVTT\n\n${cues.join('\n\n')}\n`);
-  fs.rmSync(work, { recursive: true, force: true });
   console.log(`✓ ${out} (${t.toFixed(0)}s)`);
 }
+fs.rmSync(work, { recursive: true, force: true });

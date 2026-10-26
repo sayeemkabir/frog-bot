@@ -25,6 +25,7 @@ import { FileSecretBox } from '../core/secrets';
 import { AUTH_API_METHODS, FROG_API_METHODS, type AuthApi, type FrogApi } from '../shared/types';
 import { apiKeyFromEnv, loadDotEnv, openAiKeyFromEnv } from './env';
 import { runSmoke } from './smoke';
+import { runWalkthrough, WALKTHROUGH_SIZE } from './walkthrough';
 import { DemoRunner } from './demoRunner';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,8 @@ if (smokeDir) {
   // The self-test captures the window while it sits behind other windows.
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
   app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  // Tutorial recordings are filmed at 1920x1080.
+  if (process.env.FROG_WALKTHROUGH) app.commandLine.appendSwitch('force-device-scale-factor', String(WALKTHROUGH_SIZE.scale));
 }
 
 if (!smokeDir && !app.requestSingleInstanceLock()) {
@@ -403,7 +406,9 @@ app.whenReady().then(async () => {
   if (!smokeDir) createTray();
 
   if (smokeDir) {
-    const code = await runSmoke({ engine: team, window: mainWindow!, outDir: smokeDir });
+    const code = process.env.FROG_WALKTHROUGH
+      ? await runWalkthrough({ engine: team, window: mainWindow!, outDir: smokeDir, scene: process.env.FROG_WALKTHROUGH })
+      : await runSmoke({ engine: team, window: mainWindow!, outDir: smokeDir });
     quitting = true;
     app.exit(code);
   }
