@@ -50,7 +50,7 @@ export function AvatarEditor({ name, value, onChange, allowLogo }: { name: strin
     { id: 'initials', label: 'Initials' },
     { id: 'emoji', label: 'Emoji' },
     { id: 'image', label: 'Photo' },
-    ...(allowLogo ? [{ id: 'logo' as const, label: 'Frog mark' }] : []),
+    ...(allowLogo ? [{ id: 'logo' as const, label: 'Logo' }] : []),
   ];
   return (
     <div className="field" data-testid="avatar-editor">

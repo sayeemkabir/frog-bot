@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Agent, Conversation, FileEntry } from '../../shared/types';
 import { api } from '../api';
 import { attempt, setState, toast, useStore } from '../store';
-import { Avatar, ConfirmButton, GroupAvatar, Icon, Toggle, clock, plural, timeAgo } from './ui';
+import { AppIcon, Avatar, ConfirmButton, GroupAvatar, Icon, Toggle, clock, plural, timeAgo } from './ui';
 import { MODES } from './Live';
 import { AvatarEditor } from './AvatarEditor';
 
@@ -115,7 +115,7 @@ function DetailsTab({ agent }: { agent: Agent }) {
             const on = agent.integrations.includes(i.id);
             return (
               <div key={i.id} className="list-item">
-                <span>{i.icon}</span><span className="grow">{i.name}</span>
+                <AppIcon integration={i} size={22} /><span className="grow">{i.name}</span>
                 <Toggle on={on} onChange={(v) => attempt(() => api.updateAgent(agent.id, { integrations: v ? [...agent.integrations, i.id] : agent.integrations.filter((x) => x !== i.id) }))} />
               </div>
             );

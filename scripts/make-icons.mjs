@@ -5,9 +5,11 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { root } from './tasks.mjs';
 
-const GREEN_TOP = [95, 240, 160];
-const GREEN_BOTTOM = [34, 184, 102];
-
+// The mark: a flat frog silhouette (two eye domes on a rounded head) with the
+// eyes cut out. One colour, no gradients, so it reads at 16 px and in print.
+const ACCENT = [47, 191, 113];
+const TILE_TOP = [26, 29, 32];
+const TILE_BOTTOM = [15, 17, 19];
 function crc32(buf) {
   let c;
   const table = crc32.table ??= Array.from({ length: 256 }, (_, n) => {
@@ -50,27 +52,17 @@ function png(size, rgba) {
 
 const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 const inCircle = (x, y, cx, cy, r) => (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
-const inEllipse = (x, y, cx, cy, rx, ry) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+const inRoundRect = (x, y, x0, y0, x1, y1, r) => {
+  const dx = Math.max(x0 + r - x, 0, x - (x1 - r));
+  const dy = Math.max(y0 + r - y, 0, y - (y1 - r));
+  return x >= x0 && x <= x1 && y >= y0 && y <= y1 && dx * dx + dy * dy <= r * r;
+};
 
-// Smile: quadratic curve from (20,41) via (32,47) to (44,41), 3.2 units thick.
-const smile = Array.from({ length: 120 }, (_, i) => {
-  const t = i / 119;
-  return [(1 - t) ** 2 * 20 + 2 * (1 - t) * t * 32 + t * t * 44, (1 - t) ** 2 * 41 + 2 * (1 - t) * t * 47 + t * t * 41];
-});
-const onSmile = (x, y) => smile.some(([sx, sy]) => (x - sx) ** 2 + (y - sy) ** 2 <= 1.6 ** 2);
-
-/** Colour of the frog at a point in its 64×64 design space, or null if outside. */
+/** Whether a point in the mark's 64×64 design space is inside the mark (see Logo in src/renderer/components/ui.tsx). */
 function frog(x, y) {
-  let color = null;
-  if (inCircle(x, y, 19, 20, 11) || inCircle(x, y, 45, 20, 11) || inEllipse(x, y, 32, 38, 27, 21)) {
-    color = [...mix(GREEN_TOP, GREEN_BOTTOM, Math.min(1, Math.max(0, (y - 9) / 50))), 255];
-  }
-  if (!color) return null;
-  if (inCircle(x, y, 13, 37, 3) || inCircle(x, y, 51, 37, 3)) color = [...mix(color.slice(0, 3), [255, 143, 163], 0.55), 255];
-  if (inCircle(x, y, 19, 19, 6) || inCircle(x, y, 45, 19, 6)) color = [255, 255, 255, 255];
-  if (inCircle(x, y, 20, 20, 3.2) || inCircle(x, y, 46, 20, 3.2)) color = [10, 12, 11, 255];
-  if (onSmile(x, y)) color = [10, 58, 31, 255];
-  return color;
+  const body = inCircle(x, y, 20, 22, 10) || inCircle(x, y, 44, 22, 10) || inRoundRect(x, y, 6, 24, 58, 54, 15);
+  const eyes = inCircle(x, y, 20, 22, 4) || inCircle(x, y, 44, 22, 4);
+  return body && !eyes ? [...ACCENT, 255] : null;
 }
 
 function render(size, { background }) {
@@ -85,15 +77,17 @@ function render(size, { background }) {
           const v = (py + (sy + 0.5) / ss) / size;
           let c = null;
           if (background) {
-            // Rounded square with a soft vertical gradient, frog at 78% scale.
-            const r = 0.22;
+            // Dark rounded tile, mark at 60% scale, optically centred.
+            const r = 0.225;
             const dx = Math.max(Math.abs(u - 0.5) - (0.5 - r), 0);
             const dy = Math.max(Math.abs(v - 0.5) - (0.5 - r), 0);
-            if (dx * dx + dy * dy <= r * r) c = [...mix([24, 30, 27], [10, 12, 11], v), 255];
-            const f = frog((u - 0.11) * 64 / 0.78, (v - 0.14) * 64 / 0.78);
-            if (f) c = f;
+            if (dx * dx + dy * dy <= r * r) {
+              c = [...mix(TILE_TOP, TILE_BOTTOM, v), 255];
+              const f = frog((u - 0.2) * 64 / 0.6, (v - 0.21) * 64 / 0.6);
+              if (f) c = f;
+            }
           } else {
-            c = frog(u * 64, v * 64 + 2);
+            c = frog(u * 64, v * 64 + 6);
           }
           if (c) acc = [acc[0] + c[0] * c[3], acc[1] + c[1] * c[3], acc[2] + c[2] * c[3], acc[3] + c[3]];
         }

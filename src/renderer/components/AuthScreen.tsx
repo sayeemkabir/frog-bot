@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { AuthStatus } from '../../shared/types';
 import { authApi } from '../api';
-import { Logo } from './ui';
+import { WelcomeLayout } from './ui';
 
 /** Sign in or create an account. Each account has its own private team on this computer. */
 export function AuthScreen({ onSignedIn }: { onSignedIn: (status: AuthStatus) => void }) {
@@ -32,11 +32,12 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: (status: AuthStatus) =>
   };
 
   return (
-    <div className="onboarding" data-testid="auth-screen">
-      <div className="onboarding-card">
-        <Logo className="big-logo" />
-        <h1>{signUp ? 'Create your account' : 'Welcome back'}</h1>
-        <p>{signUp ? 'Your own AI team, living on this computer.' : 'Sign in to open your team.'}</p>
+    <WelcomeLayout testId="auth-screen">
+      <div className="welcome-card">
+        <div className="welcome-head">
+          <h1>{signUp ? 'Create your account' : 'Welcome back'}</h1>
+          <p>{signUp ? 'It takes a minute. Your team is private to your account.' : 'Sign in to open your team.'}</p>
+        </div>
         <form className="auth-form" onSubmit={submit}>
           {signUp && (
             <label className="field">
@@ -76,6 +77,6 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: (status: AuthStatus) =>
           <div className="auth-note">Your name and email are kept with your account so you can sign in. Your agents, chats, files and keys stay on this computer.</div>
         )}
       </div>
-    </div>
+    </WelcomeLayout>
   );
 }

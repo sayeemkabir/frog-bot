@@ -14,6 +14,7 @@ import type { McpOAuth } from './oauth';
 import type { SecretBox } from './secrets';
 import { JsonDoc, newId } from './store';
 import { slugify } from './paths';
+import { APP_VERSION } from '../shared/version';
 
 export interface BuiltinIntegration extends Omit<Integration, 'enabled'> {
   scope?: string;
@@ -240,7 +241,7 @@ export class Integrations {
   }
 
   private async probe(integration: Integration, token?: string) {
-    const client = new Client({ name: 'frog-bot', version: '0.1.0' });
+    const client = new Client({ name: 'frog-bot', version: APP_VERSION });
     const transport = new StreamableHTTPClientTransport(new URL(integration.url!), {
       requestInit: token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
     });

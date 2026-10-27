@@ -22,7 +22,7 @@ export function IntegrationsSheet() {
   return (
     <Sheet
       testId="integrations-sheet"
-      title={adding ? <span className="row"><button className="icon-btn" onClick={() => setAdding(null)}><Icon.Back /></button>{adding.icon} Add {adding.name}</span> : 'Integrations'}
+      title={adding ? <span className="row"><button className="icon-btn" onClick={() => setAdding(null)}><Icon.Back /></button><AppIcon integration={adding} size={24} /> Add {adding.name}</span> : 'Integrations'}
       subtitle={adding ? adding.description : 'The apps your agents can use. In Ask first mode, agents check with you before they post or send anything.'}
       onClose={close}
     >

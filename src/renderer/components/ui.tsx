@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import type { Agent, AgentStatus } from '../../shared/types';
 
 type IconProps = { size?: number };
@@ -76,27 +76,47 @@ export function avatarFill(color?: string) {
   return `color-mix(in srgb, ${color || '#5b6470'} 72%, #101114)`;
 }
 
-/** The Frog Bot mark: an original frog face. */
+/** The Frog Bot mark: a flat frog silhouette with the eyes cut out (same shape as the app icon, scripts/make-icons.mjs). */
 export function Logo({ className = 'brand-logo' }: { className?: string }) {
+  const id = useId();
   return (
-    <svg className={className} viewBox="0 0 64 64" aria-label="Frog Bot">
-      <defs>
-        <linearGradient id="frog-g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#5ff0a0" />
-          <stop offset="1" stopColor="#22b866" />
-        </linearGradient>
-      </defs>
-      <circle cx="19" cy="20" r="11" fill="url(#frog-g)" />
-      <circle cx="45" cy="20" r="11" fill="url(#frog-g)" />
-      <ellipse cx="32" cy="38" rx="27" ry="21" fill="url(#frog-g)" />
-      <circle cx="19" cy="19" r="6" fill="#fff" />
-      <circle cx="45" cy="19" r="6" fill="#fff" />
-      <circle cx="20" cy="20" r="3.2" fill="#0a0c0b" />
-      <circle cx="46" cy="20" r="3.2" fill="#0a0c0b" />
-      <path d="M20 41c6 6 18 6 24 0" stroke="#0a3a1f" strokeWidth="3.2" strokeLinecap="round" fill="none" />
-      <circle cx="13" cy="37" r="3" fill="#ff8fa3" opacity="0.55" />
-      <circle cx="51" cy="37" r="3" fill="#ff8fa3" opacity="0.55" />
+    <svg className={className} viewBox="6 12 52 42" aria-label="Frog Bot">
+      <mask id={id}>
+        <rect x="0" y="0" width="64" height="64" fill="#fff" />
+        <circle cx="20" cy="22" r="4" fill="#000" />
+        <circle cx="44" cy="22" r="4" fill="#000" />
+      </mask>
+      <g fill="currentColor" mask={`url(#${id})`}>
+        <circle cx="20" cy="22" r="10" />
+        <circle cx="44" cy="22" r="10" />
+        <rect x="6" y="24" width="52" height="30" rx="15" />
+      </g>
     </svg>
+  );
+}
+
+/**
+ * The frame for the sign-in and first-run screens: what Frog Bot is on the left,
+ * the form on the right. Narrow windows show only the form.
+ */
+export function WelcomeLayout({ testId, children }: { testId: string; children: ReactNode }) {
+  return (
+    <div className="welcome" data-testid={testId}>
+      <aside className="welcome-brand">
+        <div className="welcome-mark"><Logo className="welcome-logo" /> Frog Bot</div>
+        <div className="welcome-pitch">
+          <h2>Your AI team, on your computer.</h2>
+          <p>Agents that live on this computer, work together in front of you, and ask before they act for you.</p>
+          <ul>
+            <li><Icon.Users /><div><b>A team, not a chatbot</b><span>Give each agent a job. They hand work to each other.</span></div></li>
+            <li><Icon.Shield /><div><b>You stay in control</b><span>Anything that sends, posts or deletes asks you first.</span></div></li>
+            <li><Icon.Folder /><div><b>Local by design</b><span>Agents, chats, files and keys stay on this computer.</span></div></li>
+          </ul>
+        </div>
+        <div className="welcome-foot">Open source · Windows · macOS · Linux</div>
+      </aside>
+      <main className="welcome-main">{children}</main>
+    </div>
   );
 }
 
@@ -111,7 +131,7 @@ export function Avatar({ agent, size = 36, status }: { agent?: AvatarAgent; size
     content = <img src={agent.avatarImage} alt="" />;
   } else if (style === 'logo') {
     content = <Logo className="logo-mark" />;
-    background = '#16261d';
+    background = 'color-mix(in srgb, var(--accent) 14%, var(--surface-2))';
   } else if (style === 'emoji' && agent?.emoji) {
     content = <span style={{ fontSize: size * 0.52 }}>{agent.emoji}</span>;
     background = `color-mix(in srgb, ${agent.color || '#5b6470'} 22%, #16181b)`;

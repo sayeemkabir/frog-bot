@@ -133,6 +133,8 @@ export async function runSmoke({ engine: getEngine, window, outDir }: SmokeConte
     await shot('01-onboarding');
     await click('[data-testid="onboarding-skip"]');
     check('Onboarding can be skipped', await waitFor(`!document.querySelector('[data-testid="onboarding"]')`, 5000));
+    // The demo brain needs no key, but screenshots should look like a set-up app.
+    if (process.env.FROG_SMOKE_DEMO) await getEngine().setApiKey('sk-ant-demo-key-for-screenshots-only');
 
     const snapshot = engine.snapshot();
     check('Default agent "Frog" exists', snapshot.agents.some((a) => a.name === 'Frog'));

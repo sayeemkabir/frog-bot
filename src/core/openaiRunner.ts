@@ -14,6 +14,7 @@ import type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 import type { Logger } from './logger';
 import { readJson, writeFileAtomic } from './store';
 import type { TurnRequest, TurnRunner, TurnSink } from './runner';
+import { APP_VERSION } from '../shared/version';
 
 /** Best first. The first one the key can use becomes the default brain. */
 export const OPENAI_MODEL_PREFERENCE = ['gpt-5.5', 'gpt-5.4', 'gpt-5.2', 'gpt-5.1', 'gpt-5', 'gpt-4.1', 'gpt-4o'];
@@ -460,7 +461,7 @@ export class OpenAIRunner implements TurnRunner {
   }
 
   private async connectMcp(name: string, config: McpServerConfig, cwd: string): Promise<McpHandle> {
-    const client = new Client({ name: 'frog-bot', version: '0.1.0' });
+    const client = new Client({ name: 'frog-bot', version: APP_VERSION });
     const c = config as Record<string, any>;
     if (c.type === 'sdk') {
       const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();

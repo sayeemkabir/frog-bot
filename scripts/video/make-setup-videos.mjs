@@ -52,28 +52,28 @@ const VIDEOS = {
 
 const CSS = `
 *{box-sizing:border-box}html,body{margin:0;width:1920px;height:1080px;overflow:hidden}
-body{background:#07090a;color:#ecf3ee;font-family:'Segoe UI Variable','Segoe UI',Inter,sans-serif;position:relative}
-.amb{position:absolute;inset:-20%;filter:blur(40px);background:radial-gradient(35% 30% at 18% 18%,rgba(61,220,132,.28),transparent 70%),radial-gradient(30% 28% at 88% 12%,rgba(79,195,247,.18),transparent 70%),radial-gradient(40% 35% at 60% 95%,rgba(186,104,200,.14),transparent 70%)}
-.top{position:absolute;top:56px;left:80px;display:flex;align-items:center;gap:16px;font-size:30px;font-weight:700}
+body{background:#0b0c0e;color:#ededef;font-family:Inter,'Segoe UI Variable','Segoe UI',sans-serif;position:relative}
+.amb{position:absolute;inset:0;background:radial-gradient(60% 50% at 50% 115%,rgba(47,191,113,.08),transparent 70%)}
+.top{position:absolute;top:56px;left:80px;display:flex;align-items:center;gap:16px;font-size:30px;font-weight:650;letter-spacing:-.3px}
 .top img{width:52px;height:52px}
-.os{position:absolute;top:62px;right:80px;font-size:24px;color:#a3b1a8;border:1px solid rgba(255,255,255,.12);padding:8px 18px;border-radius:999px}
+.os{position:absolute;top:62px;right:80px;font-size:24px;color:#a1a1aa;border:1px solid rgba(255,255,255,.12);padding:8px 18px;border-radius:12px}
 .main{position:absolute;inset:170px 80px 90px;display:grid;grid-template-columns:1fr 1.25fr;gap:70px;align-items:center}
 .main.center{grid-template-columns:1fr;text-align:center;justify-items:center}
-.kicker{display:inline-block;font-size:26px;font-weight:700;color:#3ddc84;background:rgba(61,220,132,.12);border:1px solid rgba(61,220,132,.35);padding:8px 20px;border-radius:999px}
-h1{font-size:84px;line-height:1.05;margin:26px 0 22px;letter-spacing:-1.5px}
-p{font-size:38px;line-height:1.45;color:#c9d6ce;margin:0}
+.kicker{display:inline-block;font-size:26px;font-weight:600;color:#2fbf71;letter-spacing:.3px}
+h1{font-size:84px;line-height:1.05;margin:18px 0 22px;letter-spacing:-2.5px;font-weight:650}
+p{font-size:38px;line-height:1.45;color:#a1a1aa;margin:0}
 b{color:#fff}
-.frame{border-radius:28px;overflow:hidden;border:2px solid rgba(255,255,255,.1);box-shadow:0 40px 120px rgba(0,0,0,.7)}
+.frame{border-radius:20px;overflow:hidden;border:2px solid rgba(255,255,255,.12);box-shadow:0 40px 120px rgba(0,0,0,.6)}
 .frame img{display:block;width:100%}
-.code{margin-top:36px;background:#030504;border:2px solid rgba(61,220,132,.35);border-radius:22px;padding:30px 34px;font:34px/1.5 'Cascadia Code',Consolas,monospace;color:#bfe8cf;word-break:break-all;text-align:left}
-.btn{display:inline-block;margin-top:40px;padding:30px 60px;border-radius:24px;font-size:44px;font-weight:800;color:#03140a;background:linear-gradient(135deg,#46e690,#22b866);box-shadow:0 20px 60px rgba(61,220,132,.45)}
+.code{margin-top:36px;background:#111215;border:2px solid rgba(255,255,255,.14);border-radius:18px;padding:30px 34px;font:34px/1.5 'Cascadia Code',Consolas,monospace;color:#ededef;word-break:break-all;text-align:left}
+.btn{display:inline-block;margin-top:40px;padding:28px 56px;border-radius:18px;font-size:42px;font-weight:600;color:#04140b;background:#2fbf71}
 .keys{display:flex;gap:22px;margin-top:40px}
-.key{min-width:140px;padding:30px 36px;border-radius:22px;background:linear-gradient(#2a312e,#171b19);border:2px solid rgba(255,255,255,.14);border-bottom-width:8px;font-size:52px;font-weight:700;text-align:center}
+.key{min-width:140px;padding:30px 36px;border-radius:18px;background:#16181c;border:2px solid rgba(255,255,255,.14);border-bottom-width:6px;font-size:50px;font-weight:600;text-align:center}
 .smart{background:#0b4f8a;border-radius:20px;padding:44px;color:#fff;box-shadow:0 40px 120px rgba(0,0,0,.6);text-align:left}
 .smart h2{font-size:52px;margin:0 0 20px;font-weight:600}.smart p{color:#e3eefb;font-size:32px}
 .smart .row{display:flex;gap:20px;margin-top:40px}.smart .b{padding:16px 34px;border:2px solid #fff;border-radius:10px;font-size:30px}
 .smart .hl{outline:6px solid #ffd54f;outline-offset:6px}
-.bigfrog{width:240px;height:240px;filter:drop-shadow(0 30px 60px rgba(61,220,132,.45))}
+.bigfrog{width:180px;height:180px;border-radius:40px}
 `;
 
 function slideHtml(s, osLabel) {
@@ -82,7 +82,7 @@ function slideHtml(s, osLabel) {
     <h1>${s.title}</h1>
     <p>${s.body}</p>
     ${s.code ? `<div class="code">${s.code}</div>` : ''}
-    ${s.button ? `<div class="btn">⬇ ${s.button}</div>` : ''}
+    ${s.button ? `<div class="btn">${s.button}</div>` : ''}
     ${s.keys ? `<div class="keys">${s.keys.map((k) => `<div class="key">${k}</div>`).join('')}</div>` : ''}`;
   let right = '';
   if (s.image) right = `<div class="frame"><img src="${shot(s.image)}"></div>`;

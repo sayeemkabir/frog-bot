@@ -43,6 +43,8 @@ if (smokeDir) {
   app.commandLine.appendSwitch('disable-renderer-backgrounding');
   // Tutorial recordings are filmed at 1920x1080.
   if (process.env.FROG_WALKTHROUGH) app.commandLine.appendSwitch('force-device-scale-factor', String(WALKTHROUGH_SIZE.scale));
+  // FROG_SMOKE_SCALE=2: sharp screenshots for the website.
+  else if (process.env.FROG_SMOKE_SCALE) app.commandLine.appendSwitch('force-device-scale-factor', process.env.FROG_SMOKE_SCALE);
 }
 
 if (!smokeDir && !app.requestSingleInstanceLock()) {

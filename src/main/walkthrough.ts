@@ -165,7 +165,7 @@ export async function runWalkthrough({ engine: getEngine, window, outDir, scene 
 
     await chapter('key', 'Next, paste your Claude or OpenAI API key, and click Start. Your key stays encrypted on your own computer.');
     await type(q('[data-testid="onboarding-key"]'), 'sk-ant-api03-demo-key-for-the-tutorial-video', { cps: 60 });
-    await click(withText('.onboarding-card button.primary', 'Start'), 300);
+    await click(withText('.welcome-card button.primary', 'Start'), 300);
     await waitFor(`!${q('[data-testid="onboarding"]')}`);
     await sleep(1500);
 

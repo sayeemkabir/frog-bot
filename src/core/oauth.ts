@@ -304,10 +304,15 @@ export class McpOAuth {
   }
 }
 
+/** The Frog Bot mark (see Logo in src/renderer/components/ui.tsx). */
+const MARK = '<svg width="44" height="36" viewBox="6 12 52 42"><mask id="m"><rect width="64" height="64" fill="#fff"/><circle cx="20" cy="22" r="4"/><circle cx="44" cy="22" r="4"/></mask>' +
+  '<g fill="#2fbf71" mask="url(#m)"><circle cx="20" cy="22" r="10"/><circle cx="44" cy="22" r="10"/><rect x="6" y="24" width="52" height="30" rx="15"/></g></svg>';
+
 function callbackPage(ok: boolean, error?: string) {
-  const title = ok ? 'Frog Bot is connected' : 'Sign-in failed';
+  const title = ok ? 'Connected to Frog Bot' : 'Sign-in did not finish';
   const body = ok ? 'You can close this tab and go back to Frog Bot.' : `Go back to Frog Bot and try again. (${error ?? 'unknown error'})`;
-  return `<!doctype html><meta charset="utf-8"><title>${title}</title>
-<body style="font-family:system-ui;background:#0b0f0c;color:#e8f5e9;display:grid;place-items:center;height:100vh;margin:0">
-<div style="text-align:center"><div style="font-size:56px">${ok ? '🐸' : '⚠️'}</div><h1 style="font-weight:600">${title}</h1><p style="opacity:.7">${body}</p></div></body>`;
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
+<body style="font:15px/1.5 Inter,'Segoe UI',-apple-system,system-ui,sans-serif;background:#0d0e10;color:#e8eaed;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px;box-sizing:border-box">
+<div style="text-align:center;max-width:420px;padding:36px 32px;border:1px solid #23262b;border-radius:14px;background:#121316">${MARK}
+<h1 style="font-size:20px;font-weight:650;margin:18px 0 6px;letter-spacing:-.3px">${title}</h1><p style="margin:0;color:${ok ? '#a3a9b2' : '#ff8b8f'}">${body}</p></div></body>`;
 }

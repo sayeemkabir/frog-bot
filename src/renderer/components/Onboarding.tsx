@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api';
 import { attempt, setState, toast } from '../store';
-import { Logo } from './ui';
+import { WelcomeLayout } from './ui';
 
 /** First launch: the only thing anyone has to do is paste an API key (Claude or OpenAI). */
 export function Onboarding() {
@@ -20,19 +20,21 @@ export function Onboarding() {
   };
 
   return (
-    <div className="onboarding" data-testid="onboarding">
-      <form className="onboarding-card" onSubmit={save}>
-        <Logo className="big-logo" />
-        <h1>Welcome to Frog Bot</h1>
-        <p>Your local AI team: agents that live on this computer, work together, and ask you before they act for you.</p>
-        <div className="steps">
-          <div className="step"><span className="n">1</span><div><b>Paste your API key</b><span className="muted">A Claude key (console.anthropic.com) works best; an OpenAI key (platform.openai.com) works too. It stays encrypted on this computer.</span></div></div>
-          <div className="step"><span className="n">2</span><div><b>Chat with Frog</b><span className="muted">Tell it what you need. Add more agents with the + button.</span></div></div>
+    <WelcomeLayout testId="onboarding">
+      <form className="welcome-card" onSubmit={save}>
+        <div className="welcome-head">
+          <span className="welcome-step">Last step</span>
+          <h1>Connect an AI model</h1>
+          <p>Paste an API key so your agents can think. A Claude key (console.anthropic.com) works best; an OpenAI key (platform.openai.com) works too.</p>
         </div>
-        <input className="input" type="password" autoFocus placeholder="sk-ant-… (Claude) or sk-… (OpenAI)" value={key} onChange={(e) => setKey(e.target.value)} data-testid="onboarding-key" style={{ padding: '12px 14px', fontSize: 15 }} />
-        <button className="btn primary" style={{ padding: '12px', fontSize: 15 }} disabled={!key.trim() || saving}>{saving ? 'Saving…' : 'Start'}</button>
+        <label className="field">
+          <span>API key</span>
+          <input className="input" type="password" autoFocus placeholder="sk-ant-… or sk-…" value={key} onChange={(e) => setKey(e.target.value)} data-testid="onboarding-key" />
+          <small>Stored encrypted on this computer. You can change it later in Settings.</small>
+        </label>
+        <button className="btn primary auth-submit" disabled={!key.trim() || saving}>{saving ? 'Saving…' : 'Start'}</button>
         <button type="button" className="btn ghost" data-testid="onboarding-skip" onClick={() => setState({ onboardingDismissed: true })}>I'll do this later</button>
       </form>
-    </div>
+    </WelcomeLayout>
   );
 }

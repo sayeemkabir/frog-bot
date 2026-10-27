@@ -1,5 +1,6 @@
 import { query, type CanUseTool, type McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 import type { Logger } from './logger';
+import { APP_VERSION } from '../shared/version';
 
 export interface TurnRequest {
   agentId: string;
@@ -61,7 +62,7 @@ export function engineEnv(apiKey: string, engineDir: string, base: NodeJS.Proces
   }
   env.ANTHROPIC_API_KEY = apiKey;
   env.CLAUDE_CONFIG_DIR = engineDir;
-  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'frog-bot/0.1.0';
+  env.CLAUDE_AGENT_SDK_CLIENT_APP = `frog-bot/${APP_VERSION}`;
   return env;
 }
 

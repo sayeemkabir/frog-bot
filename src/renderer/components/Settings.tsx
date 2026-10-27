@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import { attempt, setState, toast, useStore } from '../store';
 import { Icon, Sheet, Toggle } from './ui';
+import { APP_VERSION } from '../../shared/version';
 
 export function SettingsSheet() {
   const settings = useStore((s) => s.settings);
@@ -22,8 +23,8 @@ export function SettingsSheet() {
       <div className="field">
         <span>AI brain</span>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <span className={`chip ${settings.provider === 'anthropic' ? 'ok' : ''}`}>Claude {settings.hasClaudeKey ? '✓ key saved' : '· no key'}</span>
-          <span className={`chip ${settings.provider === 'openai' ? 'ok' : ''}`}>OpenAI {settings.hasOpenAiKey ? '✓ key saved' : '· no key'}</span>
+          <span className={`chip ${settings.provider === 'anthropic' ? 'ok' : ''}`}>Claude {settings.hasClaudeKey ? '· key saved' : '· no key'}</span>
+          <span className={`chip ${settings.provider === 'openai' ? 'ok' : ''}`}>OpenAI {settings.hasOpenAiKey ? '· key saved' : '· no key'}</span>
           <span className="muted">{settings.provider ? `Agents use ${settings.provider === 'anthropic' ? 'Claude' : 'OpenAI'} now.` : 'Add a key so agents can work.'}</span>
         </div>
       </div>
@@ -99,11 +100,11 @@ export function SettingsSheet() {
       <div className="field">
         <span>Where your agents keep their files</span>
         <div className="row">
-          <code className="input" style={{ fontFamily: 'var(--mono)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{settings.homeDir}</code>
-          <button className="btn" onClick={() => attempt(() => api.openPath(settings.homeDir))}><Icon.Folder /></button>
+          <code className="input path-box" title={settings.homeDir}>{settings.homeDir}</code>
+          <button className="btn icon-only" title="Open folder" onClick={() => attempt(() => api.openPath(settings.homeDir))}><Icon.Folder /></button>
         </div>
       </div>
-      <div className="muted">Frog Bot 0.1.0 · Made by Sayeem Kabir</div>
+      <div className="muted settings-foot">Frog Bot {APP_VERSION} · Open source (MIT) · Made by Sayeem Kabir</div>
     </Sheet>
   );
 }

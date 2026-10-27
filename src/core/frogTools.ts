@@ -1,5 +1,6 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import { APP_VERSION } from '../shared/version';
 
 /** What the team tools need from the engine, scoped to one agent's turn. */
 export interface TeamBridge {
@@ -25,7 +26,7 @@ const text = (value: string) => ({ content: [{ type: 'text' as const, text: valu
 export function createTeamServer(bridge: TeamBridge) {
   return createSdkMcpServer({
     name: 'frog',
-    version: '0.1.0',
+    version: APP_VERSION,
     tools: [
       tool('list_team', 'List the other agents on this Frog Bot team with their roles and whether they are busy.', {}, async () => {
         const team = bridge.listTeam();

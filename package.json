@@ -1,7 +1,7 @@
 {
   "name": "frog-bot",
   "productName": "Frog Bot",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "description": "A desktop team of Claude agents that live on your computer, talk to each other, use your apps through MCP, and ask before acting on your behalf.",
   "author": "Sayeem Kabir <rezwanksayeem@gmail.com>",
   "license": "MIT",

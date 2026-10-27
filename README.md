@@ -1,10 +1,22 @@
-<p align="center"><img src="build/icon.png" width="96" alt="Frog Bot"></p>
+<p align="center"><img src="build/icon.png" width="88" alt="Frog Bot"></p>
 
 <h1 align="center">Frog Bot</h1>
 
-<p align="center"><b>Your local AI team.</b><br>AI teammates that live on your own computer, work together, use your apps, and ask you before they act for you.<br><a href="https://sayeemkabir.github.io/frogbot/"><b>🌐 Website and downloads</b></a></p>
+<p align="center"><b>Your AI team, on your computer.</b><br>An open-source desktop app for a team of AI agents that work together, use your apps, and ask before they act.</p>
 
----
+<p align="center">
+  <a href="https://sayeemkabir.github.io/frogbot/"><b>Website and downloads</b></a> ·
+  <a href="https://sayeemkabir.github.io/frogbot/#videos">Videos</a> ·
+  <a href="https://github.com/sayeemkabir/frog-bot/issues">Report an issue</a>
+</p>
+
+<p align="center">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.1.0-2fbf71">
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-555">
+</p>
+
+<p align="center"><img src="docs/images/frog-bot.webp" alt="Frog Bot: a group chat where Frog hands a job to Dog, Dog asks permission before running a command, and reports back"></p>
 
 ## What it is
 
@@ -40,10 +52,10 @@ That's it. Your key is stored encrypted with your system keychain and never leav
 | Give an agent a job | Open its chat and type it in plain words |
 | Add a teammate | **+** → New agent (or pick an idea like "Researcher") |
 | Work with several agents | **+** → New group, then `@Name` to address one |
-| See what an agent is doing | **About [agent]** → **Screen** tab (live steps and browser view) |
-| Find files an agent made | **About [agent]** → **Files**, or the shared folder in `FrogsWorld/shared` |
+| See what an agent is doing | **Details** → **Screen** tab (live steps and browser view) |
+| Find files an agent made | **Details** → **Files**, or the shared folder in `FrogsWorld/shared` |
 | Connect another app | **Integrations** (bottom left) → pick Slack, Notion, GitHub… or a custom MCP server |
-| Let an agent act more on its own | **About [agent]** → **Work on its own** (it still asks before sending or deleting) |
+| Choose how free an agent is | The mode under the message box: **Ask first**, **Auto** or **Plan** (or Shift+Tab) |
 | Stop an agent | The **Stop** button at the top of the chat |
 | Check what happened | **Logs** tab |
 
